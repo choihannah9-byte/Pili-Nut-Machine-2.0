@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pili cracker — Rev D interactive model (audited)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #171d24; --panel: #10151b; --line: #2a3542; --ink: #d9e0e7; --ink-2: #93a3b3; --ink-3: #5f6f7f;
+    --accent: #f0932b; --ok: #6fc38a; --warn: #e0b04a; --bad: #e0614f; --kernel: #ead9b4;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #171d24; --panel: #10151b; --line: #2a3542; --ink: #d9e0e7; --ink-2: #93a3b3; --ink-3: #5f6f7f;
+  } }
+  :root[data-theme="dark"] { --bg: #171d24; --panel: #10151b; --line: #2a3542; --ink: #d9e0e7; --ink-2: #93a3b3; --ink-3: #5f6f7f; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 13px; display: flex; width: 100%; height: 100%; }
+  #stage { flex: 1; position: relative; min-width: 0; }
+  #viewport { position: absolute; inset: 0; cursor: grab; }
+  #viewport canvas { touch-action: none; display: block; }
+  #topbar { position: absolute; top: 0; left: 0; right: 0; padding: 10px 14px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; background: linear-gradient(rgba(23,29,36,0.92), rgba(23,29,36,0)); pointer-events: none; }
+  #topbar h1 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.01em; }
+  #topbar h1 span { color: var(--ink-2); font-weight: 400; }
+  #topbar .hint { font-size: 11.5px; color: var(--ink-2); text-align: right; }
+  #views { position: absolute; bottom: 12px; left: 12px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 24px); }
+  #views button { padding: 6px 11px; font: 500 11.5px "IBM Plex Sans", sans-serif; cursor: pointer; background: rgba(16,21,27,0.85); color: var(--ink-2); border: 1px solid var(--line); border-radius: 3px; }
+  #views button:hover, #views button:focus-visible { color: var(--ink); border-color: var(--ink-2); outline: none; }
+  #stagelabel { position: absolute; bottom: 52px; left: 12px; font: 500 11.5px "IBM Plex Mono", monospace; color: var(--accent); pointer-events: none; }
+  #panel { width: 330px; flex-shrink: 0; border-left: 1px solid var(--line); padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; background: var(--panel); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .lbl { font-size: 11.5px; color: var(--ink-2); margin-bottom: 5px; }
+  .lbl b { color: var(--ink); font-weight: 600; }
+  button.big { flex: 1; padding: 9px 0; font: 600 13px "IBM Plex Sans", sans-serif; cursor: pointer; border-radius: 3px; border: 1px solid var(--ok); background: #1a2a22; color: var(--ok); }
+  button.big.stopped { background: var(--accent); color: #141a21; border-color: var(--accent); }
+  button.sm { padding: 6px 9px; font: 500 11.5px "IBM Plex Sans", sans-serif; cursor: pointer; border-radius: 3px; border: 1px solid var(--line); background: transparent; color: var(--ink-2); }
+  button.sm.on { background: #1e2a36; color: var(--ink); border-color: #3b4c5e; }
+  button.sm:hover { color: var(--ink); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .grades { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+  .grades button.on { border-color: var(--accent); color: var(--accent); background: #2a2018; }
+  #gapNote { font-size: 11.5px; line-height: 1.45; margin-top: 4px; color: var(--ink-2); }
+  #gapNote.ok { color: var(--ok); } #gapNote.warn { color: var(--warn); } #gapNote.bad { color: var(--bad); }
+  table.count { width: 100%; border-collapse: collapse; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; }
+  table.count td { padding: 3px 0; border-bottom: 1px solid #1c252f; color: var(--ink-2); }
+  table.count td:last-child { text-align: right; color: var(--ink); }
+  table.count tr.head td { color: var(--ink-3); border-bottom: 1px solid var(--line); padding-top: 6px; }
+  #subgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  #subgrid button { text-align: left; }
+  #panel > * { flex: 0 0 auto; }
+  #pickBox { border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px;
+             min-height: 84px; height: auto; flex: 0 0 auto; overflow-wrap: anywhere; }
+  #pickBox.hot { border-color: var(--accent); }
+  #pickName { font-size: 13.5px; font-weight: 600; color: var(--accent); margin: 2px 0 4px; }
+  #pickDesc { font-size: 11.8px; color: #b9c5d0; line-height: 1.5; overflow-wrap: anywhere; }
+  #pickHint { font-size: 11.8px; color: var(--ink-3); line-height: 1.5; }
+  .note { font-size: 11.5px; color: var(--ink-2); line-height: 1.5; border-left: 2px solid var(--accent); padding: 2px 0 2px 10px; }
+  #foot { font-size: 10.5px; color: var(--ink-3); line-height: 1.55; border-top: 1px solid var(--line); padding-top: 10px; }
+  #foot b { color: var(--ink-2); font-weight: 500; }
+  @media (max-width: 760px) {
+    body { flex-direction: column; }
+    #stage { flex: 1 1 52%; }
+    #panel { width: 100%; flex: 0 0 48%; border-left: none; border-top: 1px solid var(--line); }
+    #topbar .hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="viewport"></div>
+    <div id="topbar">
+      <h1>Pili nut shell cracker <span>— Rev D interactive model (audited) (TUP BSME capstone)</span></h1>
+      <div class="hint">Drag to orbit, wheel or pinch to zoom, tap a part to identify it. Tap a bin to open its gate. Drag the handwheel to change the roller gap.</div>
+    </div>
+    <div id="stagelabel"></div>
+    <div id="views">
+      <button data-v="iso">Overview</button>
+      <button data-v="grading">Hopper and grading</button>
+      <button data-v="feed">Feed channel</button>
+      <button data-v="nip">Roller nip</button>
+      <button data-v="sep">Separation</button>
+      <button data-v="drive">Drive</button>
+      <button data-v="sdrive">Screen drive</button>
+      <button data-v="top">Top</button>
+    </div>
+  </div>
+
+  <div id="panel">
+    <div class="row">
+      <button id="runBtn" class="big">Running at 36 rpm</button>
+      <button id="feedBtn" class="sm on">Feeding nuts</button>
+    </div>
+    <div>
+      <div class="lbl">Playback speed <b id="spdv">1.0×</b></div>
+      <input id="speed" type="range" min="0.25" max="4" step="0.25" value="1" aria-label="Playback speed" />
+    </div>
+    <div>
+      <div class="lbl">Grade being cracked (opens that bin's gate; the interlock bar blocks the other two)</div>
+      <div class="grades">
+        <button class="sm" data-g="0">Large 31–36</button>
+        <button class="sm on" data-g="1">Medium 25–31</button>
+        <button class="sm" data-g="2">Small 20–25</button>
+      </div>
+    </div>
+    <div>
+      <div class="lbl">Roller gap (rigid hard stop) <b id="gapv">20</b> mm <button id="gapAuto" class="sm" style="float:right">Set for this grade</button></div>
+      <input id="gap" type="range" min="10" max="27" step="1" value="20" aria-label="Roller gap" />
+      <div id="gapNote"></div>
+    </div>
+    <div>
+      <div class="lbl">Where the nuts are</div>
+      <table class="count" id="counts"></table>
+      <div class="row" style="margin-top:8px">
+        <button id="returnBtn" class="sm">Return uncracked nuts to their bins (repass)</button>
+        <button id="refillBtn" class="sm">Refill hopper</button>
+      </div>
+    </div>
+    <div>
+      <div class="lbl">Exploded view <span id="expNote" style="color:var(--accent);display:none">(machine paused)</span></div>
+      <input id="explode" type="range" min="0" max="1" step="0.01" value="0" aria-label="Explode assembly" />
+    </div>
+    <div>
+      <div class="lbl">Show subsystems</div>
+      <div id="subgrid"></div>
+    </div>
+    <div id="pickBox">
+      <div class="lbl">Part inspector</div>
+      <div id="pickName"></div>
+      <div id="pickDesc"></div>
+      <div id="pickHint">Tap any part of the machine. Bins select the grade; the handwheel sets the gap.</div>
+    </div>
+    <div class="note" id="revnote">Rev D lays the machine out as a linear gravity cascade (hopper and grading at the right, rollers in the middle, separation and trays at the left) so every hand-off is supported and visible. Nuts are fed tip-first with the ridge in the V-channel groove, so the rollers load ridge-to-face across the width, as in the 8 Sept verification note. Separation follows that note too: coarse screen, then the 8 mm screen, then cross-flow air on chips, then the sorting tray.</div>
+    <div id="foot">
+      <b>Placeholders pending team measurements:</b> 31/25 mm deck apertures and the 24 mm coarse screen (size survey and dissection), 38 mm lane, ~40° chute angles, 4 mm oscillation throw, blower velocity (terminal-velocity tests). Bottom deck drawn solid per the Rev D brief; Rev 2 §3.2 still says 20 mm apertures with a fines drawer — flip BOTTOM_DECK_PERFORATED in the script if the drawer stays. <b>Envelope:</b> the model comes out at about 1.13 × 0.55 × 1.35 m (drive overhang included); the 950 × 450 × 700 mm in §3.2/§3.8 cannot hold a three-deck sorter above a Ø150 nip above a two-stage screen and should be replaced from CAD. Draw-in worst case (36 mm nut at 21 mm gap): α ≈ 23°, needs μ ≥ 0.43. Peak torque remains Whiteboard Task 0.
+    </div>
+  </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script id="app">
+"use strict";
+/* ================================================================
+   PILI NUT SHELL CRACKER — REV D (2026-09)
+   Design reference: Chapters 1–3 Working Draft Rev 2 + the 8 Sept 2026
+   design-verification note (crack orientation, separation order).
+   Machine coords: mm, y-up, floor y=0. Flow runs +x → −x (hopper on the
+   right, trays on the left). Front +z (operator), drive rear −z.
+   ================================================================ */
+
+// ---- engineering placeholders (all [verify] against the team's own lot) ----
+const BOTTOM_DECK_PERFORATED = true;  // Rev 2 §3.2: 20 mm apertures + fines drawer.
+const DEFORM = 1.1, CLEAR = 0.5, KFRAC = 0.54, KJIT = 0.4;   // Gallegos 2013 deformation; kernel Ø ≈ 0.54·width
+const GRADES = [
+  { key: "large", label: "Large", w: [31, 36], z: 95, color: 0x4f351f },
+  { key: "medium", label: "Medium", w: [25, 31], z: 0, color: 0x5d3f26 },
+  { key: "small", label: "Small", w: [20, 25], z: -95, color: 0x6b4a2e },
+];
+const kernelMax = (g) => KFRAC * g.w[1] + KJIT;
+const recWindow = (g) => [Math.max(10, Math.ceil(kernelMax(g) + CLEAR)), Math.min(27, Math.floor(g.w[0] - DEFORM))];
+function judge(gap, nut) {
+  if (nut.w - gap < DEFORM) return "uncracked";
+  if (gap < nut.k + CLEAR) return "crushed";
+  return "whole";
+}
+
+// ---- layout (mm) ----
+const Yr = 520, R = 75, FACE = 80, GAP0 = 16, GAPMIN = 10, GAPMAX = 27;
+const XL = -83;                       // fixed roller centre; adjustable at 83 + (gap − 16)
+const ZP = -137.5;                    // sync-chain plane
+const ZT = -175;                      // take-off chain plane
+const CH = { lo: new THREE.Vector3(5, 615, 0), ang: 35 * Math.PI / 180, len: 160, slots: [28, 90, 152] };
+const DECK = { x0: 262, x1: 562, slope: Math.tan(12 * Math.PI / 180), lows: [1128, 1068, 1008], halfZ: 120 };
+const deckY = (i, x) => DECK.lows[i] + (x - DECK.x0) * DECK.slope;
+const CS = { x0: -170, x1: 90, zr: -110, zf: 110, yr: 338, ang: 18 * Math.PI / 180 };
+const csY = (z) => CS.yr - (z - CS.zr) * Math.tan(CS.ang);
+const FS = { x0: -310, x1: 90, halfZ: 110, ylo: 146, ang: 10 * Math.PI / 180 };
+const fsY = (x) => FS.ylo + (x - FS.x0) * Math.tan(FS.ang);
+const BIN = { x: 190, yFloor: 808, top: 888 };
+const FUN = { outlet: new THREE.Vector3(115, 720, 0), rim: 800 };
+const HOP = { x: 510, outlet: 1255, rim: 1385 };
+const TRAY = { kernel: [-395, -330], chip: [-470, -405], floor: 48, sort: { x: [-165, 95], z: [123, 182], floor: 181 } };
+const AIR = { lipX: FS.x0, lipY: fsY(FS.x0) };
+
+// ---- materials ----
+const M = {
+  steel: () => new THREE.MeshStandardMaterial({ color: 0x9aa3ac, metalness: 0.85, roughness: 0.4 }),
+  darkSteel: () => new THREE.MeshStandardMaterial({ color: 0x555d65, metalness: 0.8, roughness: 0.5 }),
+  frame: () => new THREE.MeshStandardMaterial({ color: 0x2f6a4e, metalness: 0.25, roughness: 0.65 }),
+  frame2: () => new THREE.MeshStandardMaterial({ color: 0x3a5f73, metalness: 0.25, roughness: 0.65 }),
+  galv: () => new THREE.MeshStandardMaterial({ color: 0xb9c2c9, metalness: 0.55, roughness: 0.45 }),
+  stainless: () => new THREE.MeshStandardMaterial({ color: 0xd7dde2, metalness: 0.9, roughness: 0.25, side: THREE.DoubleSide }),
+  bronze: () => new THREE.MeshStandardMaterial({ color: 0xb0824a, metalness: 0.75, roughness: 0.45 }),
+  bearing: () => new THREE.MeshStandardMaterial({ color: 0x3b444d, metalness: 0.4, roughness: 0.7 }),
+  guard: () => new THREE.MeshStandardMaterial({ color: 0xe07020, transparent: true, opacity: 0.22, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide, depthWrite: false }),
+  hood: () => new THREE.MeshStandardMaterial({ color: 0x4a7ba6, transparent: true, opacity: 0.22, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide, depthWrite: false }),
+  cover: () => new THREE.MeshStandardMaterial({ color: 0x9fc4d8, transparent: true, opacity: 0.3, metalness: 0.3, roughness: 0.4, side: THREE.DoubleSide, depthWrite: false }),
+  rubber: () => new THREE.MeshStandardMaterial({ color: 0x22262a, roughness: 0.95 }),
+  chain: () => new THREE.MeshStandardMaterial({ color: 0x30363c, metalness: 0.7, roughness: 0.55 }),
+  motor: () => new THREE.MeshStandardMaterial({ color: 0x3a6fa6, metalness: 0.4, roughness: 0.5 }),
+  red: () => new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 }),
+  yellow: () => new THREE.MeshStandardMaterial({ color: 0xf2c811, roughness: 0.6 }),
+};
+const NUTMAT = GRADES.map((g) => new THREE.MeshStandardMaterial({ color: g.color, roughness: 0.9 }));
+const KERNELMAT = new THREE.MeshStandardMaterial({ color: 0xead9b4, roughness: 0.7 });
+const KERNELBAD = new THREE.MeshStandardMaterial({ color: 0xa8352a, roughness: 0.7 });
+const SHELLMAT = new THREE.MeshStandardMaterial({ color: 0x3d2a18, roughness: 0.95, side: THREE.DoubleSide });
+const CHIPMAT = new THREE.MeshStandardMaterial({ color: 0x4e3620, roughness: 0.95 });
+const DUSTMAT = new THREE.MeshStandardMaterial({ color: 0x8a7a66, roughness: 1 });
+
+// ---- geometry helpers ----
+function tag(obj, name, desc) { obj.traverse((o) => { o.userData.pname = name; o.userData.pdesc = desc; }); return obj; }
+function box(w, h, d, mat) { return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); }
+function cyl(r, h, mat, seg = 24) { return new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), mat); }
+function at(mesh, x, y, z) { mesh.position.set(x, y, z); return mesh; }
+// axis-aligned or oriented member between two points, square section s
+function beam(x1, y1, z1, x2, y2, z2, s, mat) {
+  const a = new THREE.Vector3(x1, y1, z1), b = new THREE.Vector3(x2, y2, z2);
+  const d = new THREE.Vector3().subVectors(b, a); const len = d.length();
+  const m = box(len, s, s, mat);
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), d.clone().normalize());
+  return m;
+}
+// perforated surface: canvas tile (2·pitch mm square, two staggered holes) used as map with transparent holes
+function holeSurface(w, d, aperture, pitch) {
+  const c = document.createElement("canvas"); c.width = c.height = 128;
+  const g = c.getContext("2d"); const s = 128 / (2 * pitch);
+  g.fillStyle = "#d6dce1"; g.fillRect(0, 0, 128, 128);
+  g.globalCompositeOperation = "destination-out";
+  const r = (aperture / 2) * s;
+  for (const [hx, hy] of [[pitch / 2, pitch / 2], [pitch * 1.5, pitch / 2], [0, pitch * 1.5], [pitch, pitch * 1.5], [2 * pitch, pitch * 1.5]]) {
+    g.beginPath(); g.arc(hx * s, hy * s, r, 0, Math.PI * 2); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(w / (2 * pitch), d / (2 * pitch));
+  const mat = new THREE.MeshStandardMaterial({ map: t, metalness: 0.6, roughness: 0.4, alphaTest: 0.5, side: THREE.DoubleSide });
+  return new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), mat);
+}
+// rectangular frustum (funnel) — top opening wT×dT at y=h, bottom wB×dB at y=0, bottom centre offset ox
+function rectFunnel(wT, dT, wB, dB, h, ox, mat) {
+  ox = ox || 0;
+  const v = [
+    -wT / 2, h, -dT / 2, wT / 2, h, -dT / 2, wT / 2, h, dT / 2, -wT / 2, h, dT / 2,        // 0-3 top
+    ox - wB / 2, 0, -dB / 2, ox + wB / 2, 0, -dB / 2, ox + wB / 2, 0, dB / 2, ox - wB / 2, 0, dB / 2, // 4-7 bottom
+  ];
+  const idx = [0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7];
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(v, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+  return new THREE.Mesh(geo, mat);
+}
+function serratedRoller(mat) {
+  // 60 shallow grip serrations (1.5 mm) on Ø150 — grip, not orientation
+  const teeth = 60, rOut = 75, rRoot = 73.5, shape = new THREE.Shape();
+  for (let i = 0; i < teeth; i++) {
+    const a0 = (i / teeth) * Math.PI * 2, a1 = ((i + 0.5) / teeth) * Math.PI * 2;
+    if (i === 0) shape.moveTo(rRoot * Math.cos(a0), rRoot * Math.sin(a0)); else shape.lineTo(rRoot * Math.cos(a0), rRoot * Math.sin(a0));
+    shape.lineTo(rOut * Math.cos(a1), rOut * Math.sin(a1));
+  }
+  shape.closePath();
+  const g = new THREE.ExtrudeGeometry(shape, { depth: FACE, bevelEnabled: false, curveSegments: 2 }); g.translate(0, 0, -FACE / 2);
+  return new THREE.Mesh(g, mat);
+}
+function sprocket(teeth, mat, thick = 9) {
+  const rp = 12.7 / (2 * Math.sin(Math.PI / teeth)), rTip = rp + 2, rRoot = rp - 2, shape = new THREE.Shape();
+  for (let i = 0; i < teeth; i++) {
+    const a0 = (i / teeth) * Math.PI * 2, a1 = ((i + 0.35) / teeth) * Math.PI * 2, a2 = ((i + 0.5) / teeth) * Math.PI * 2, a3 = ((i + 0.85) / teeth) * Math.PI * 2;
+    if (i === 0) shape.moveTo(rRoot * Math.cos(a0), rRoot * Math.sin(a0)); else shape.lineTo(rRoot * Math.cos(a0), rRoot * Math.sin(a0));
+    shape.lineTo(rTip * Math.cos(a1), rTip * Math.sin(a1)); shape.lineTo(rTip * Math.cos(a2), rTip * Math.sin(a2)); shape.lineTo(rRoot * Math.cos(a3), rRoot * Math.sin(a3));
+  }
+  shape.closePath();
+  const g = new THREE.ExtrudeGeometry(shape, { depth: thick, bevelEnabled: false, curveSegments: 2 }); g.translate(0, 0, -thick / 2);
+  const grp = new THREE.Group(); grp.add(new THREE.Mesh(g, mat));
+  const hub = cyl(Math.max(14, rp * 0.5), thick + 8, mat); hub.rotation.x = Math.PI / 2; grp.add(hub);
+  grp.userData.rp = rp; return grp;
+}
+function spring(r, len, coils, mat, tube = 3) {
+  const pts = [], n = coils * 12;
+  for (let i = 0; i <= n; i++) { const t = i / n, a = t * coils * Math.PI * 2; pts.push(new THREE.Vector3(t * len, r * Math.cos(a), r * Math.sin(a))); }
+  return new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), n, tube, 6, false), mat);
+}
+function flangeBearing(mat) {   // UCF206 4-bolt flange, axis along z
+  const g = new THREE.Group();
+  const fl = box(88, 88, 12, mat); g.add(fl);
+  const boss = cyl(28, 26, M.steel()); boss.rotation.x = Math.PI / 2; g.add(boss);
+  for (const [bx, by] of [[-32, -32], [32, -32], [-32, 32], [32, 32]]) { const b = cyl(4.5, 16, M.darkSteel(), 6); b.rotation.x = Math.PI / 2; b.position.set(bx, by, 0); g.add(b); }
+  return g;
+}
+function chainStripe(nLinks) {
+  const c = document.createElement("canvas"); c.width = 16; c.height = 4; const g = c.getContext("2d");
+  g.fillStyle = "#2a3036"; g.fillRect(0, 0, 16, 4); g.fillStyle = "#8a949e"; g.fillRect(0, 0, 9, 4);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(nLinks, 1); t.magFilter = THREE.NearestFilter;
+  return t;
+}
+function chainMesh(pts, closed) {
+  const curve = new THREE.CatmullRomCurve3(pts, closed, "catmullrom", 0.05);
+  const L = curve.getLength(); const links = Math.round(L / 12.7);
+  const tex = chainStripe(links);
+  const m = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(60, links * 2), 3.2, 6, closed),
+    new THREE.MeshStandardMaterial({ map: tex, metalness: 0.7, roughness: 0.55 }));
+  m.userData.len = L; m.userData.tex = tex; return m;
+}
+// pili nut: triangular-section spindle, long axis local +y, ridge (a triangle vertex) at local +z
+function nutMesh(w, L, mat) {
+  const r = 0.62 * w, g = new THREE.Group();
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.28 * r, r, 0.52 * L, 3, 1, false), mat); top.position.y = 0.26 * L;
+  const bot = new THREE.Mesh(new THREE.CylinderGeometry(r, 0.28 * r, 0.48 * L, 3, 1, false), mat); bot.position.y = -0.24 * L;
+  g.add(top, bot); return g;
+}
+const _qm = new THREE.Matrix4(), _vx = new THREE.Vector3();
+function basisQuat(longAxis, ridge) {   // local +y → longAxis, local +z → ridge
+  const y = longAxis.clone().normalize(), z = ridge.clone().normalize();
+  _vx.crossVectors(y, z).normalize();
+  _qm.makeBasis(_vx, y, z);
+  return new THREE.Quaternion().setFromRotationMatrix(_qm);
+}
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const dirChannel = V(-Math.cos(CH.ang), -Math.sin(CH.ang), 0);            // down-channel
+const ridgeChannel = V(Math.sin(CH.ang), -Math.cos(CH.ang), 0);            // into the V apex (floor normal, downward)
+const Q_CHANNEL = basisQuat(dirChannel, ridgeChannel);
+const Q_NIP = basisQuat(V(0, -1, 0), V(1, 0, 0));                          // tip-first; ridge toward the adjustable (+x) roller
+const channelPt = (s, up = 0) => V(CH.lo.x + s * Math.cos(CH.ang), CH.lo.y + s * Math.sin(CH.ang) + up, 0);
+
+/* ---------- state ---------- */
+const LIVE = { gap: 20, explode: 0, running: true, feeding: true, speed: 1 };
+const API = {};
+let selGrade = 1;
+function showPick(name, desc) {
+  const bx = document.getElementById("pickBox"), n = document.getElementById("pickName"), d = document.getElementById("pickDesc"), h = document.getElementById("pickHint");
+  if (name) { n.textContent = name; d.textContent = desc || ""; h.style.display = "none"; bx.classList.add("hot"); }
+  else { n.textContent = ""; d.textContent = ""; h.style.display = "block"; bx.classList.remove("hot"); }
+}
+/* ---------- scene ---------- */
+const mount = document.getElementById("viewport");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xdfe4e8);
+const camera = new THREE.PerspectiveCamera(38, mount.clientWidth / Math.max(1, mount.clientHeight), 5, 12000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(mount.clientWidth, mount.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+mount.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a9096, 0.85));
+const key = new THREE.DirectionalLight(0xffffff, 0.75); key.position.set(600, 1200, 800); scene.add(key);
+const fill = new THREE.DirectionalLight(0xcfe0f0, 0.3); fill.position.set(-800, 500, -600); scene.add(fill);
+const grid = new THREE.GridHelper(4000, 40, 0xa8b2ba, 0xccd3d9); grid.position.y = -12; scene.add(grid);
+
+const sub = {};
+const mk = (k, ex) => { const g = new THREE.Group(); g.userData.exVec = ex; scene.add(g); sub[k] = g; return g; };
+const Gframe = mk("frame", V(0, 0, 0));
+const Gcrack = mk("cracking", V(0, 0.45, 0));
+const Gadj = mk("adjustment", V(0.7, 0.3, 0));
+const Gdrive = mk("drive", V(0, 0, -1.3));
+const Gsort = mk("sorting", V(0.3, 1.2, 0));
+const Gfeed = mk("feeding", V(0.5, 0.7, 0));
+const Gsep = mk("separation", V(-0.6, -0.45, 0));
+const Gguard = mk("guards", V(0, 0, 1.8));
+const Gflow = mk("flow", V(0, 0, 0));
+const Gnuts = mk("nuts", V(0, 0, 0));
+const Gscale = mk("scale", V(0, 0, 0));
+
+/* ---------- FRAME (40×40×3 MS tube, welded; plates bolt on) ---------- */
+{
+  const fm = M.frame();
+  const member = (x1, y1, z1, x2, y2, z2, name, desc, s = 40) => Gframe.add(tag(beam(x1, y1, z1, x2, y2, z2, s, fm), name, desc));
+  // base ring
+  const baseD = "40×40×3 MS tube base, welded flat on a surface table; six rubber feet. Long rails at the drive side and the operator side; cross rails under every column and under the drawer/tray shelves.";
+  for (const z of [-290, 170]) member(-480, 20, z, 620, 20, z, "Base long rail", baseD);
+  for (const x of [-480, -320, -200, 100, 330, 600]) member(x, 20, -270, x, 20, 150, "Base cross rail", baseD);
+  for (const [fx, fz] of [[-470, -290], [-470, 170], [100, -290], [100, 170], [610, -290], [610, 170]]) {
+    Gframe.add(tag(at(cyl(16, 12, M.rubber()), fx, -6, fz), "Anti-vibration foot", "Rubber, M10 stud — six off"));
+  }
+  // columns
+  const colD = "40×40×3 MS tube column, welded to the base ring. All columns stand outside the deck-frame and screen-box envelopes so nothing solid crosses an oscillating part.";
+  for (const z of [-170, 170]) {
+    member(-480, 40, z, -480, 220, z, "Hood-end column", colD);
+    member(-200, 40, z, -200, 390, z, "Cracker column", colD + " Carries the cracker table and, on the drive side, the screen rocker pivot.");
+    member(330, 40, z, 330, 1300, z, "Sorter column", colD + " Carries the sorter mid rails, the deck rocker lugs and the top ring.");
+    member(600, 40, z, 600, 1300, z, "Sorter column", colD);
+  }
+  // cracker table: two cross beams + two longitudinal rails the side plates bolt to
+  const tblD = "Cracker table — 40×40 tube at 390–430 mm. The 10 mm side plates bolt to the two longitudinal rails (machined flat first, so nothing distorts after welding).";
+  for (const x of [-200, 330]) member(x, 410, -190, x, 410, 190, "Table cross beam", tblD);
+  for (const z of [-75, 75]) member(-200, 410, z, 330, 410, z, "Plate mounting rail", tblD);
+  // separation-end mid members: spring posts, sorting-tray posts, hood top rails
+  for (const z of [-130, 130]) {
+    member(-320, 40, z, -320, 160, z, "Screen spring post", "Carries one of the four coil springs the screen box floats on", 20);
+    member(100, 40, z, 100, 160, z, "Screen spring post", "Carries one of the four coil springs the screen box floats on", 20);
+  }
+  for (const x of [-150, 95]) member(x, 40, 170, x, 181, 170, "Sorting-tray post", "Static post from the front base rail; the sorting tray sits on the two posts and does not move with the screen box", 20);
+  for (const z of [-170, 170]) member(-320, 40, z, -320, 220, z, "Hood post", "Short post on the base cross rail; supports the hood top rail's inner end", 30);
+  for (const z of [-170, 170]) member(-480, 220, z, -320, 220, z, "Hood top rail", "Ties the hood-end columns to the spring posts; the separation hood hangs from these", 30);
+  // drive pedestal
+  const pedD = "Motor and reducer pedestal — plate on two posts from the rear base rail, at shaft height so the reducer output couples straight to the fixed roller shaft.";
+  for (const x of [-140, 210]) member(x, 40, -290, x, 470, -290, "Pedestal post", pedD);
+  Gframe.add(tag(at(box(400, 10, 100, fm), 35, 475, -290), "Pedestal plate", pedD));
+  // sorter mid rails, rocker lugs, top ring, hopper cradle
+  for (const z of [-170, 170]) {
+    member(330, 880, z, 600, 880, z, "Sorter mid rail", "Carries the four rocker links the deck frame stands on");
+    member(330, 1280, z, 600, 1280, z, "Top ring rail", "Closed ring at the top of the sorter columns; the hopper cradle beams sit on it");
+    for (const x of [345, 555]) Gframe.add(tag(at(box(10, 30, 8, M.darkSteel()), x, 910, z > 0 ? 156 : -156), "Rocker lug (static)", "Lower pin of a rocker link — on top of the mid rail"));
+  }
+  for (const x of [330, 600]) member(x, 1280, -190, x, 1280, 190, "Top ring cross rail", "Closed ring at the top of the sorter columns");
+  for (const x of [412, 608]) Gframe.add(tag(at(box(20, 20, 380, fm), x, 1300, 0), "Hopper cradle beam", "Carries the hopper mounting flange; bolts to the top ring"));
+  // jackshaft bracket from the rear sorter column
+  Gframe.add(tag(at(box(170, 10, 50, fm), 225, 905, -175), "Jackshaft bracket", "Cantilevered plate from the rear sorter column; carries the two jackshaft bearings"));
+  // screen rocker pivot bracket from the cracker table cross beam
+  Gframe.add(tag(at(box(28, 30, 20, fm), -234, 430, -106), "Rocker pivot bracket", "Pivot for the screen rocker lever, on the drive-side face of the table cross beam"));
+  // side plates + slot + bolts
+  for (const zc of [-65, 65]) {
+    Gframe.add(tag(at(box(425, 220, 10, M.frame2()), 52.5, 540, zc), "Side plate", "10 mm MS, bolted to the plate mounting rails (machined flat first). Carries the fixed-roller flange bearing, the milled carriage slot with gibs, and the screw boss — mirror-pair drilled (claim-critical, outsourced)."));
+    Gframe.add(tag(at(box(130, 100, 11, M.darkSteel()), 125, 520, zc), "Carriage slot", "Milled, gib-lined guide for the adjustable-roller carriage; 17 mm of travel covers the 10–27 mm gap range"));
+    for (const [bx, by] of [[-140, 445], [-40, 445], [60, 445], [160, 445], [245, 445], [-140, 635], [245, 635]]) {
+      const bh = cyl(6, 6, M.darkSteel(), 6); bh.rotation.x = Math.PI / 2; bh.position.set(bx, by, zc + (zc > 0 ? 7 : -7));
+      Gframe.add(tag(bh, "Plate bolt M10", "Bolted-plate decision — plates come off for roller changes"));
+    }
+  }
+}
+
+/* ---------- CRACKING (rollers, shafts, bearings, carriages) ---------- */
+const rollerL = new THREE.Group(), rollerRAsm = new THREE.Group();
+const spinL = new THREE.Group(), spinR = new THREE.Group();
+let eccScreen = null;
+{
+  const rl = serratedRoller(M.steel());
+  tag(rl, "Fixed roller", "AISI 1045, Ø150 × 80 mm face, flame/induction hardened HRC 45–50, finish-ground; 60 shallow grip serrations (≈1.5 mm) — grip for draw-in, not orientation. Driven directly by the reducer output through the rear coupling.");
+  const shL = cyl(15, 345, M.darkSteel()); shL.rotation.x = Math.PI / 2; shL.position.z = -67.5;
+  tag(shL, "Fixed roller shaft", "Ø30 AISI 1045, ground journals. Rear extension carries (front to back): screen eccentric, sync sprocket, take-off sprocket, jaw coupling to the reducer. This is the main shaft — every driven function branches from it.");
+  eccScreen = cyl(18, 12, M.bronze()); eccScreen.rotation.x = Math.PI / 2; eccScreen.position.set(4, 0, -106);
+  tag(eccScreen, "Screen eccentric (4 mm throw) — screen-box drive", "Start of the screen-box drive train: eccentric disc on the main shaft; the rod from here drives the screen rocker lever → screen box at 36 strokes/min");
+  spinL.add(rl, shL, eccScreen);
+  rollerL.add(spinL); rollerL.position.set(XL, Yr, 0);
+  for (const zc of [-76, 76]) { const fb = flangeBearing(M.bearing()); fb.position.set(0, 0, zc); rollerL.add(tag(fb, "Flange bearing UCF206", "Fixed side — bolted to the side plate face")); }
+  Gcrack.add(rollerL);
+
+  const rr = serratedRoller(M.steel());
+  tag(rr, "Adjustable roller", "Matched to the fixed roller within 0.05 mm; carried on two gibbed carriages. It is NOT driven from the motor — it is synchronised by the serpentine chain from the fixed roller.");
+  const shR = cyl(15, 265, M.darkSteel()); shR.rotation.x = Math.PI / 2; shR.position.z = -27.5;
+  tag(shR, "Adjustable roller shaft", "Ø30 AISI 1045; rear extension carries only the sync sprocket — it moves in x with the gap");
+  spinR.add(rr, shR); rollerRAsm.add(spinR);
+  for (const zc of [-65, 65]) {
+    const car = box(110, 88, 30, M.darkSteel()); car.position.set(0, 0, zc);
+    rollerRAsm.add(tag(car, "Sliding carriage", "25 mm MS block in the gibbed slot; the die springs hold its +x face against the stop collar on the screw"));
+    const fb = flangeBearing(M.bearing()); fb.position.set(0, 0, zc + (zc > 0 ? 21 : -21));
+    rollerRAsm.add(tag(fb, "Flange bearing UCF206", "Adjustable side — bolted to the carriage face"));
+    for (const gy of [-52, 52]) rollerRAsm.add(tag(at(box(126, 8, 6, M.bronze()), 0, gy, zc + (zc > 0 ? 8 : -8)), "Gib strip", "Bronze, shimmed — keeps the carriage from cocking under nip load"));
+  }
+  rollerRAsm.position.set(83 + (LIVE.gap - GAP0), Yr, 0);
+  Gcrack.add(rollerRAsm);
+  rollerL.userData.exSelf = V(-0.8, 0, 0); rollerRAsm.userData.exSelf = V(0.8, 0, 0);
+  // catch funnel under the nip (between the side plates, rim at roller-bottom level)
+  const catchF = rectFunnel(232, 116, 70, 70, 80, 0, M.stainless()); catchF.position.set(0, 365, 0);
+  Gcrack.add(tag(catchF, "Catch funnel under nip", "304 SS; rim at roller-bottom level between the side plates, walls at ≥43°; delivers the cracked mixture onto the coarse screen"));
+}
+
+/* ---------- GAP ADJUSTMENT (M24 screw hard stops) ---------- */
+const adjMove = new THREE.Group();   // translates with the gap
+const springsAdj = [];
+let hwG = null, hwSpin = 0;
+{
+  for (const zc of [-78, 78]) {
+    const boss = at(box(34, 60, 40, M.frame2()), 240, Yr, zc);
+    Gadj.add(tag(boss, "Screw boss + bronze bushing", "M24 thread in bronze; welded to the side plate. The screw advances through this nut"));
+    const spr = spring(19, 66, 7, M.steel()); spr.position.set(150, Yr, zc); springsAdj.push(spr);
+    Gadj.add(tag(spr, "Die spring (preload)", "≈2,000 N total across both screws — above the 1.6 kN fracture force, so the gap does not open in normal cracking; opens only on a foreign object or a mis-graded nut, and snaps back to the stop, never below it"));
+    const scr = cyl(12, 135, M.darkSteel()); scr.rotation.z = Math.PI / 2; scr.position.set(207.5, Yr, zc);
+    adjMove.add(tag(scr, "Adjustment screw M24×3", "Rigid hard stop: one turn = 3 mm of gap; set per grade under lockout"));
+    const col = cyl(17, 14, M.bronze()); col.rotation.z = Math.PI / 2; col.position.set(147, Yr, zc);
+    adjMove.add(tag(col, "Stop collar — hard stop", "The carriage face bears on this collar; minimum gap is set here"));
+    const nut = cyl(19, 19, M.darkSteel(), 6); nut.rotation.z = Math.PI / 2; nut.position.set(258, Yr, zc);
+    adjMove.add(tag(nut, "M24 locknut", "Locked against the boss for each grade batch"));
+    const sp = cyl(18, 6, M.chain()); sp.rotation.z = Math.PI / 2; sp.position.set(272, Yr, zc);
+    adjMove.add(tag(sp, "#25 link sprocket", "Both screws turn together — no roller skew"));
+  }
+  for (const dy of [15, -15]) adjMove.add(tag(at(box(6, 3, 156, M.chain()), 272, Yr + dy, 0), "#25 link chain", "Ties the two screws so one handwheel sets both"));
+  hwG = new THREE.Group();
+  const rim = cyl(40, 12, M.frame()); rim.rotation.z = Math.PI / 2;
+  const hub = cyl(10, 18, M.darkSteel()); hub.rotation.z = Math.PI / 2;
+  hwG.add(rim, hub);
+  for (let k = 0; k < 3; k++) { const spoke = box(8, 68, 8, M.frame()); spoke.rotation.x = (k * Math.PI) / 3; hwG.add(spoke); }
+  hwG.position.set(282, Yr, 78);
+  tag(hwG, "Handwheel — drag me", "Press and drag up/down to open or close the gap. Turns both chain-linked M24 screws: the adjustable roller, carriages, collars and sync sprocket translate together; the fixed roller never moves; the sync chain re-tensions.");
+  hwG.traverse((o) => { o.userData.isWheel = true; });
+  adjMove.add(hwG);
+  Gadj.add(adjMove);
+  Gadj.add(tag(at(box(80, 16, 2, M.stainless()), 125, 585, 71), "Gap scale 10–30 mm", "Engraved on the front plate; the pointer on the carriage reads the set gap. The operating chart makes the operator check this against the selected grade before opening a gate."));
+  const ptr = at(box(3, 16, 3, M.red()), 138, 585, 72); Gadj.add(tag(ptr, "Gap pointer", "On the carriage")); adjMove.userData.ptr = ptr;
+}
+
+/* ---------- DRIVE: motor → worm reducer → main shaft → sync chain, screen eccentric, sorter take-off ---------- */
+const spkL = sprocket(16, M.chain()), spkR = sprocket(16, M.chain()), spkT = sprocket(16, M.chain()), spkJ = sprocket(11, M.chain());
+let chainSync = null, chainTake = null; const idlers = [];
+const jackSpin = new THREE.Group(); let rodDeck = null, rodScreen = null, lever = null, linkScreen = null;
+{
+  tag(spkL, "Sync sprocket 16T #40 (fixed shaft)", "Pitch Ø65.1 mm on the main shaft. The serpentine chain engages the opposite flank of the other sprocket, so the adjustable roller counter-rotates.");
+  tag(spkR, "Sync sprocket 16T #40 (adjustable shaft)", "Moves in x with the gap; the spring idlers keep wrap ≥ 90° over the 160–177 mm centre-distance range");
+  spkL.position.set(XL, Yr, ZP); spkR.position.set(83 + (LIVE.gap - GAP0), Yr, ZP);
+  Gdrive.add(spkL, spkR);
+  tag(spkT, "Sorter take-off sprocket 16T", "On the main shaft behind the sync sprocket; drives the jackshaft up at the sorter (16:11 step-up → ≈52 strokes/min)");
+  spkT.position.set(XL, Yr, ZT); Gdrive.add(spkT);
+  // idlers (C2 assembly) on posts from the rear side plate
+  for (const [ix, iy] of [[-85, Yr + 90], [100, Yr + 75]]) {
+    const asm = new THREE.Group(); asm.position.set(ix, iy, ZP);
+    const wheel = new THREE.Group();
+    const wr = cyl(14, 8, M.steel(), 18); wr.rotation.x = Math.PI / 2;
+    const f1 = cyl(16, 2, M.darkSteel(), 18); f1.rotation.x = Math.PI / 2; f1.position.z = 5; const f2 = f1.clone(); f2.position.z = -5;
+    const hb = cyl(5, 14, M.darkSteel()); hb.rotation.x = Math.PI / 2;
+    wheel.add(wr, f1, f2, hb); asm.add(wheel); idlers.push(wheel);
+    const axle = cyl(2.5, 26, M.darkSteel()); axle.rotation.x = Math.PI / 2; axle.position.z = -3;
+    const arm = at(box(8, 40, 6, M.frame()), 0, 23, -11), pad = at(box(24, 8, 12, M.frame()), 0, 46, -11);
+    const sp = spring(5, 26, 5, M.steel(), 1.6); sp.rotation.z = Math.PI / 2; sp.position.set(13, 42, -11);
+    const post = at(box(10, 10, 74), 0, 46, 26); post.material = M.frame();
+    asm.add(axle, arm, pad, sp, post);
+    Gdrive.add(tag(asm, "Spring-loaded idler", "Wheel on a stub axle in the chain plane, on a spring-loaded pivot arm; the post reaches back to the rear side plate. Keeps the serpentine chain tensioned and wrap ≥ 90° at every gap."));
+  }
+  // coupling, reducer, motor (rear)
+  const jc = new THREE.Group();
+  for (const dz of [-8, 8]) { const h = cyl(22, 14, M.darkSteel()); h.rotation.x = Math.PI / 2; h.position.z = dz * 1.6; jc.add(h); }
+  const spider = cyl(18, 10, M.rubber()); spider.rotation.x = Math.PI / 2; jc.add(spider);
+  jc.position.set(XL, Yr, -215);
+  Gdrive.add(tag(jc, "Jaw coupling (output)", "Reducer output shaft → fixed roller shaft, in line. This is where power enters the machine's main shaft."));
+  const red = at(box(95, 95, 90, M.darkSteel()), XL, Yr, -290);
+  Gdrive.add(tag(red, "Worm gear reducer 40:1, self-locking", "Rev 2 §3.2: 0.5 hp × 40:1 → 36 rpm at the rollers; self-locking, so the rollers stop without coast-down when the E-stop cuts power. Output shaft along z, input shaft along x (motor beside it)."));
+  const outStub = cyl(12, 14, M.steel()); outStub.rotation.x = Math.PI / 2; outStub.position.set(XL, Yr, -239); Gdrive.add(tag(outStub, "Reducer output shaft", "Keyed to the coupling"));
+  const inStub = cyl(9, 14, M.steel()); inStub.rotation.z = Math.PI / 2; inStub.position.set(-29, Yr, -290); Gdrive.add(tag(inStub, "Reducer input shaft", "From the motor through the input coupling"));
+  const jc0 = cyl(20, 12, M.rubber()); jc0.rotation.z = Math.PI / 2; jc0.position.set(-15, Yr, -290); Gdrive.add(tag(jc0, "Jaw coupling (input)", "Motor → worm reducer input"));
+  const mot = cyl(50, 180, M.motor()); mot.rotation.z = Math.PI / 2; mot.position.set(85, Yr, -290);
+  const fan = cyl(52, 18, M.darkSteel()); fan.rotation.z = Math.PI / 2; fan.position.set(184, Yr, -290);
+  const tb = at(box(40, 22, 40, M.darkSteel()), 85, Yr + 58, -290);
+  const mfoot = at(box(170, 6, 110, M.darkSteel()), 85, 478, -290);
+  Gdrive.add(tag(mot, "Motor 0.5 hp TEFC, 220 V single-phase", "1 hp fallback per Rev 3 §3.8. Foot-mounted on the pedestal in line with the reducer input; wired by the shop electrician with starter, overload and E-stop."),
+    tag(fan, "Motor fan cowl", ""), tag(tb, "Motor terminal box", "220 V wiring"), tag(mfoot, "Motor foot plate", "Slotted holes for alignment to the reducer input"));
+  // jackshaft at the sorter
+  const jsh = cyl(8, 140, M.darkSteel()); jsh.rotation.x = Math.PI / 2; jsh.position.set(180, 920, -145);
+  Gdrive.add(tag(jsh, "Sorter jackshaft", "Chain-driven from the main shaft; carries the 11T sprocket and the deck eccentric"));
+  for (const z of [-195, -155]) Gdrive.add(tag(at(box(26, 24, 12, M.bearing()), 180, 918, z), "Jackshaft bearing", "Small pillow block on the bracket"));
+  tag(spkJ, "Jackshaft sprocket 11T", "16:11 step-up from the take-off sprocket → ≈52 strokes/min at the decks");
+  spkJ.position.set(180, 920, ZT); Gdrive.add(spkJ);
+  const eccD = cyl(14, 10, M.bronze()); eccD.rotation.x = Math.PI / 2; eccD.position.set(4, 0, 0);
+  jackSpin.add(eccD); jackSpin.position.set(180, 920, -208);
+  Gdrive.add(tag(jackSpin, "Deck eccentric (4 mm throw)", "8 mm stroke at the deck frame through the connecting rod"));
+  rodDeck = box(85, 10, 8, M.darkSteel()); Gdrive.add(tag(rodDeck, "Deck connecting rod", "Eccentric → lug under the deck frame; nearly horizontal, so the deck frame strokes in x only"));
+  // screen rocker: eccentric on the main shaft → rod → lever (pivot on frame) → link → screen box lug
+  rodScreen = box(152, 8, 8, M.darkSteel()); Gdrive.add(tag(rodScreen, "Screen connecting rod", "From the main-shaft eccentric to the top of the rocker lever"));
+  lever = new THREE.Group(); lever.position.set(-235, 430, -106);
+  const lv = box(10, 210, 8, M.frame2()); lv.position.y = -15; lever.add(lv);
+  const pin = cyl(4, 14, M.steel()); pin.rotation.x = Math.PI / 2; lever.add(pin);
+  Gdrive.add(tag(lever, "Screen rocker lever (screen-box actuator)", "This is what drives the separation screen — the screen box is NOT just resting on its springs. Pivoted on the frame at 430 mm: 90 mm upper arm takes the eccentric rod at shaft height, 120 mm lower arm pushes the screen box at box height (stroke ≈ 11 mm). Converts the shaft-height throw into box-height stroke with no bend in any rod."));
+  linkScreen = box(40, 8, 8, M.darkSteel()); Gdrive.add(tag(linkScreen, "Screen link", "Lever bottom → lug on the screen-box ring"));
+}
+function buildSyncChain(gapNow) {
+  // Rev C1 exact geometry: crossing run = internal tangent between the 16T pitch circles, sin ψ = 2r/d.
+  if (chainSync) { Gdrive.remove(chainSync); chainSync.geometry.dispose(); }
+  const rs = 32.55, ri = 14, Lx = XL, Rx = 67 + gapNow, Yc = Yr;
+  const I1 = { x: -85, y: Yr + 90 }, I2 = { x: 100, y: Yr + 75 };
+  const d = Rx - Lx, psi = Math.asin((2 * rs) / d);
+  const aCrossL = psi - Math.PI / 2, aCrossR = Math.PI / 2 + psi;
+  const tangHi = (cx, cy, ix, iy) => { const dx = ix - cx, dy = iy - cy, D = Math.hypot(dx, dy); return Math.atan2(dy, dx) + Math.acos(rs / D); };
+  const tangLo = (cx, cy, ix, iy) => { const dx = ix - cx, dy = iy - cy, D = Math.hypot(dx, dy); return Math.atan2(dy, dx) - Math.acos(rs / D); };
+  const entryL = tangHi(Lx, Yc, I1.x, I1.y), exitR = tangLo(Rx, Yc, I2.x, I2.y);
+  const pts = [];
+  const arc = (cx, cy, r, a0, a1, n) => { for (let i = 0; i <= n; i++) { const a = a0 + ((a1 - a0) * i) / n; pts.push(V(cx + r * Math.cos(a), cy + r * Math.sin(a), ZP)); } };
+  arc(I1.x, I1.y, ri, 0.45 * Math.PI, 0.95 * Math.PI, 6);
+  arc(Lx, Yc, rs, entryL, aCrossL + 2 * Math.PI, 24);
+  arc(Rx, Yc, rs, aCrossR, exitR, 18);
+  arc(I2.x, I2.y, ri, 0.02 * Math.PI, 0.55 * Math.PI, 6);
+  chainSync = chainMesh(pts, true); chainSync.userData.dir = +1;   // chain travels opposite to this polyline order
+  tag(chainSync, "Serpentine #40 sync chain", "Exact internal-tangent crossing: clears both Ø30 shafts by 17.6 mm at every gap; wrap ≥ 90° on both sprockets across the 160–177 mm range. Runs dry inside the chain guard — no lubricant path near the product.");
+  Gdrive.add(chainSync);
+}
+function buildTakeoffChain() {
+  const c1 = { x: XL, y: Yr, r: 32.55 }, c2 = { x: 180, y: 920, r: 22.6 };
+  const dx = c2.x - c1.x, dy = c2.y - c1.y, D = Math.hypot(dx, dy), phi = Math.atan2(dy, dx), beta = Math.acos((c1.r - c2.r) / D);
+  const pts = [];
+  const arc = (c, a0, a1, n) => { for (let i = 0; i <= n; i++) { const a = a0 + ((a1 - a0) * i) / n; pts.push(V(c.x + c.r * Math.cos(a), c.y + c.r * Math.sin(a), ZT)); } };
+  // travel order: wrap c1 the long way (angle decreasing), tight side up to c2, wrap c2, back down
+  arc(c1, phi - beta, phi + beta - 2 * Math.PI, 22);
+  arc(c2, phi + beta, phi - beta, 12);
+  chainTake = chainMesh(pts, true); chainTake.userData.dir = -1;    // polyline is in travel order
+  tag(chainTake, "Sorter take-off chain #40", "Open loop from the main shaft to the jackshaft (≈460 mm centres). Power path: motor → reducer → main shaft → this chain → jackshaft → eccentric → deck frame.");
+  Gdrive.add(chainTake);
+}
+buildSyncChain(LIVE.gap); buildTakeoffChain();
+API.buildSyncChain = buildSyncChain;
+
+/* ---------- SORTING: hopper, three decks on a rocker-mounted frame ---------- */
+const deckFrame = new THREE.Group(); const rockers = []; const DISCH_Z = [88, 0, -88];
+{
+  const hop = rectFunnel(200, 260, 60, 120, 130, 0, M.galv()); hop.position.set(HOP.x, HOP.outlet, 0);
+  Gsort.add(tag(at(box(230, 8, 300, M.galv()), HOP.x, 1314, 0), "Hopper mounting flange", "Flange welded around the hopper cone; lands on the two cradle beams so the hopper is carried by the frame and touches nothing that oscillates"));
+  Gsort.add(tag(hop, "Hopper", "3–4 kg batch, galvanised outside / 304 SS lining; walls ≥ measured angle of repose + margin (placeholder 50°). Outlet 60 × 120 mm throttles onto the top deck's feed end. Seats on the cradle beams of the top ring — static, touches nothing that oscillates."));
+  const dfm = M.frame2();
+  const dfD = "Deck frame — 20×20 tube box that carries all three decks; stands on four rocker links and is stroked ±4 mm in x by the jackshaft eccentric";
+  for (const z of [-134, 134]) {
+    deckFrame.add(tag(at(box(310, 20, 20, dfm), 410, 970, z), "Deck frame rail", dfD));
+    deckFrame.add(tag(at(box(310, 20, 20, dfm), 410, 1240, z), "Deck frame rail", dfD));
+    for (const x of [265, 555]) deckFrame.add(tag(at(box(20, 290, 20, dfm), x, 1105, z), "Deck frame upright", dfD));
+    for (const x of [345, 555]) deckFrame.add(tag(at(box(10, 30, 6, M.darkSteel()), x, 945, z > 0 ? 145 : -145), "Rocker lug (frame)", "Upper pin of a rocker link"));
+  }
+  for (const x of [265, 555]) { deckFrame.add(tag(at(box(20, 20, 288, dfm), x, 970, 0), "Deck frame cross rail", dfD)); deckFrame.add(tag(at(box(20, 20, 288, dfm), x, 1240, 0), "Deck frame cross rail", dfD)); }
+  deckFrame.add(tag(at(box(10, 55, 120, M.darkSteel()), 265, 932, -190), "Deck drive lug", "Bracket under the deck-frame cross rail, carried outboard to z = −190 so the connecting rod clears the small-grade transition trough; the rod from the jackshaft eccentric pins here"));
+  const specs = [
+    ["Top deck — 31 mm apertures", "Retains the large grade (31–36 mm); 25–31 and smaller fall through. 304 SS, 12° nominal, adjustable inclination (assisted sliding at the shared-drive stroke).", 31, 40],
+    ["Middle deck — 25 mm apertures", "Retains the medium grade (25–31 mm); smaller fall through to the bottom deck.", 25, 33],
+    ["Bottom deck — 20 mm apertures", "Retains the small grade (20–25 mm) and conveys it to the small bin; anything under 20 mm drops through to the fines drawer. Set BOTTOM_DECK_PERFORATED = false to draw it as a solid collecting deck instead.", 20, 28],
+  ];
+  specs.forEach(([nm, ds, ap, pitch], i) => {
+    const g = new THREE.Group();
+    const perf = i < 2 || BOTTOM_DECK_PERFORATED;
+    const plate = perf ? holeSurface(300, 240, ap, pitch) : box(300, 3, 240, M.stainless());
+    g.add(tag(plate, nm, ds));
+    for (const zs of [-122, 122]) g.add(tag(at(box(300, 34, 3, M.stainless()), 0, 17, zs), "Deck side skirt", "34 mm walls both sides — nuts cannot roll off laterally"));
+    g.add(tag(at(box(3, 34, 246, M.stainless()), 151, 17, 0), "Deck feed-end wall", "Closes the high end under the hopper"));
+    const zc = DISCH_Z[i];
+    for (const [z0, z1] of [[-123, zc - 32], [zc + 32, 123]]) if (z1 - z0 > 6) g.add(tag(at(box(3, 34, z1 - z0, M.stainless()), -151, 17, (z0 + z1) / 2), "Discharge-end wall", `Low end closed except a 64 mm opening at z = ${zc} — each deck discharges at its own z so the three troughs run straight down without crossing`));
+    if (zc !== 0) {
+      const dl = Math.hypot(80, Math.abs(zc) - 30), defl = at(box(dl, 30, 3, M.stainless()), -100, 15, zc / 2 - (zc > 0 ? 15 : -15)); defl.rotation.y = Math.atan2(zc > 0 ? -(Math.abs(zc) - 30) : (Math.abs(zc) - 30), -80);
+      g.add(tag(defl, "Discharge deflector", "Angled plate on the deck that steers the retained fraction to this deck's offset opening (assisted by the stroke)"));
+    }
+    g.rotation.z = 12 * Math.PI / 180; g.position.set(412, DECK.lows[i] + 150 * DECK.slope, 0);
+    deckFrame.add(g);
+  });
+  if (BOTTOM_DECK_PERFORATED) deckFrame.add(tag(at(box(300, 24, 240, M.galv()), 412, 985, 0), "Fines drawer", "Under-deck pan for < 20 mm debris (Rev 2 §3.2)"));
+  Gsort.add(deckFrame);
+  for (const z of [-150, 150]) for (const x of [345, 555]) {
+    const rk = at(box(6, 40, 4, M.steel()), x, 927, z); rockers.push(rk);
+    Gsort.add(tag(rk, "Rocker link", "Pinned top and bottom; four links form a parallel linkage so the deck frame strokes in x without lifting"));
+  }
+}
+
+/* ---------- FEEDING: troughs → buffer bins + interlock → funnel → V-channel → nip ---------- */
+const gateR = [], binPiles = [], binZ = GRADES.map((g) => g.z);
+let barGrp = null, chGrp = null;
+function orient(obj, p1, p2) {
+  const d = new THREE.Vector3().subVectors(p2, p1); const len = d.length(); const dn = d.clone().normalize();
+  const up = new THREE.Vector3(0, 1, 0); up.addScaledVector(dn, -up.dot(dn)).normalize();
+  const side = new THREE.Vector3().crossVectors(dn, up);
+  const m = new THREE.Matrix4().makeBasis(dn, up, side);
+  obj.quaternion.setFromRotationMatrix(m); obj.position.copy(p1).addScaledVector(d, 0.5);
+  return len;
+}
+function trough(p1, p2, w, wallH, mat) {
+  const g = new THREE.Group(); const len = p1.distanceTo(p2);
+  g.add(box(len, 3, w, mat), at(box(len, wallH, 3, mat), 0, wallH / 2, w / 2 + 1.5), at(box(len, wallH, 3, mat), 0, wallH / 2, -w / 2 - 1.5));
+  orient(g, p1, p2); return g;
+}
+{
+  GRADES.forEach((g, i) => {
+    const tr = trough(V(264, DECK.lows[i] - 6, DISCH_Z[i]), V(200, BIN.top + 4, g.z), 56, 26, M.stainless());
+    Gfeed.add(tag(tr, "Grade transition trough", `U-channel from the ${["top", "middle", "bottom"][i]} deck's offset discharge opening straight down to the ${g.label.toLowerCase()} bin (${[74, 69, 60][i]}°, ≥ measured slide angle + margin). The three troughs run side by side and never cross.`));
+  });
+  GRADES.forEach((g, gi) => {
+    const bin = new THREE.Group(); const st = M.stainless();
+    const floor = box(78, 3, 76, st); floor.rotation.z = 25 * Math.PI / 180; floor.position.set(0, 16, 0);
+    bin.add(tag(floor, `${g.label} bin floor`, "Sloped 25° to the gate so the bin empties by gravity"));
+    for (const zs of [-40, 40]) bin.add(tag(at(box(74, 80, 3, st), 0, 40, zs), `${g.label} grade bin`, "Buffer ≈1.5–2 kg — decouples continuous grading from batch cracking. Tap this bin to select its grade: the interlock bar slides here and only this gate can lift."));
+    bin.add(tag(at(box(3, 80, 82, st), 37, 40, 0), `${g.label} grade bin`, "Back wall; the trough fills the bin from above"));
+    for (const gz of [-34, 34]) bin.add(tag(at(box(6, 62, 6, M.darkSteel()), -39, 31, gz), "Gate guide rail", "Vertical guide for the slide gate"));
+    const gate = at(box(4, 62, 64, st), -38, 31, 0);
+    const knob = cyl(5, 10, M.bronze()); knob.rotation.z = Math.PI / 2; knob.position.set(-8, 24, 0); gate.add(knob);
+    bin.add(tag(gate, `${g.label} slide gate`, "Lifts 34 mm to release the grade into the funnel — a gravity drop, not hard-plumbed to the channel. The interlock bar's single cutout must sit in front of it before it can lift."));
+    gateR.push(gate);
+    const pile = at(box(60, 4, 66, NUTMAT[gi]), 0, 26, 0); pile.scale.y = 0.01; bin.add(pile); binPiles.push(pile);
+    bin.position.set(BIN.x, BIN.yFloor, g.z);
+    bin.traverse((o) => { o.userData.grade = gi; });
+    Gfeed.add(bin);
+  });
+  barGrp = new THREE.Group();
+  barGrp.add(at(box(8, 14, 118, M.bronze()), 0, 0, -94), at(box(8, 14, 118, M.bronze()), 0, 0, 94), at(box(8, 26, 10, M.bronze()), 0, 6, 158));
+  tag(barGrp, "Gate interlock bar", "Poka-yoke: one bar, one 70 mm cutout. Only the gate behind the cutout can lift, so two grades can never be released at once. Tap a bin to slide it. Note the bar does not tie the gap to the grade — the operating chart's scale check does that.");
+  barGrp.position.set(148, 816, binZ[selGrade]); Gfeed.add(barGrp);
+  for (const gz of [-162, 162]) Gfeed.add(tag(at(box(12, 8, 14, M.darkSteel()), 148, 806, gz), "Interlock bar guide", "The bar slides in z between end guides with detents at the three gates"));
+  const fun = rectFunnel(210, 280, 40, 40, 80, -10, M.stainless()); fun.position.set(125, FUN.outlet.y, 0);
+  Gfeed.add(tag(fun, "Collecting funnel", "Receives whichever grade is released; converging walls ≥ slide angle (placeholder 40°); 40 mm outlet drops nuts one at a time into the top of the V-channel"));
+  // single-lane V-channel, 35° to the nip
+  chGrp = new THREE.Group();
+  const st = M.stainless();
+  const pv1 = box(CH.len, 3, 20, st); pv1.rotation.x = 55 * Math.PI / 180; pv1.position.set(CH.len / 2, 8.2, 5.7);
+  const pv2 = box(CH.len, 3, 20, st); pv2.rotation.x = -55 * Math.PI / 180; pv2.position.set(CH.len / 2, 8.2, -5.7);
+  const w1 = at(box(CH.len, 30, 3, st), CH.len / 2, 25, 20.5), w2 = at(box(CH.len, 30, 3, st), CH.len / 2, 25, -20.5);
+  const cover = at(box(CH.len, 3, 44, M.cover()), CH.len / 2, 41, 0);
+  chGrp.add(
+    tag(pv1, "V-profile feed channel — 38 mm lane", "The floor is a 70° V (groove angle is a bench-screened factor: 45/60/75°). The nut's triangular section settles with one ridge in the groove and the flat face up — the passive orientation claim. The groove bisector lies in the plane of the roller centres, so at the nip the ridge faces the adjustable roller and the convex face the fixed roller (8 Sept verification note). Nuts queue tip-to-tail, one lane wide."),
+    tag(pv2, "V-profile feed channel — second plate", "Mirror of the other V plate"),
+    tag(w1, "Lane wall", "38 mm lane: passes any single graded nut, blocks two abreast — singulation by geometry, which is why it depends on grading purity"),
+    tag(w2, "Lane wall", "Single-lane containment above the V"),
+    tag(cover, "Anti-shingling cover (clear)", "Clearance ≈ max nut thickness + 5 mm so nuts cannot ride over each other"),
+    tag(at(box(3, 26, 40, st), CH.len - 4, 24, 0), "Anti-bridge comb", "Breaks two-nut arches where the funnel drops into the lane")
+  );
+  const pin = cyl(2.5, 52, M.bronze()); pin.rotation.x = Math.PI / 2; pin.position.set(95, 20, 0);
+  chGrp.add(tag(pin, "Escapement pin provision", "Two cross-drilled positions; a drop-in pin becomes a passive escapement if commissioning shows surging or premature nip entry"));
+  const brk = at(box(6, 60, 100, M.frame2()), 118, -34, 0);
+  chGrp.add(tag(brk, "Channel bracket", "Ties the channel to the side plates through the nip guard — the channel is supported at both ends"));
+  chGrp.rotation.z = CH.ang; chGrp.position.copy(CH.lo);
+  Gfeed.add(chGrp);
+  for (const zs of [-44, 44]) Gfeed.add(tag(at(box(80, 55, 3, st), 5, 617, zs), "Nip entry shroud", "Closes the channel-to-nip transition between the side plates: nuts cannot bounce out, hands cannot reach in (containment + ISO 13857 in one part)"));
+  Gfeed.add(tag(at(box(3, 55, 90, st), -35, 617, 0), "Nip entry shroud end", "Stops a nut over-running the fixed roller"));
+}
+
+/* ---------- SEPARATION: coarse screen → 8 mm screen → cross-flow air → trays; sorting tray at the front ---------- */
+const sepBox = new THREE.Group(); let csGrp = null, fsGrp = null;
+{
+  const st = M.stainless(), fm = M.frame2();
+  const ringD = "Screen-box ring — 20×20 tube carrying both screens; floats on four coil springs and is stroked ≈11 mm in x by the rocker lever";
+  for (const z of [-130, 130]) sepBox.add(tag(at(box(440, 20, 20, fm), -110, 250, z), "Screen-box ring rail", ringD));
+  for (const x of [-330, 110]) sepBox.add(tag(at(box(20, 20, 280, fm), x, 250, 0), "Screen-box ring end", ringD));
+  for (const x of [-330, 110]) for (const z of [-130, 130]) sepBox.add(tag(at(box(20, 30, 20, fm), x === -330 ? -320 : 100, 265, z), "Ring corner post", "Seat for the spring and the screen supports"));
+  sepBox.add(tag(at(box(10, 70, 20, M.darkSteel()), -195, 285, -115), "Screen drive lug", "On the ring's drive-side rail; the rocker link pins here"));
+  // coarse screen (tilts to the front)
+  csGrp = new THREE.Group();
+  csGrp.add(tag(holeSurface(260, 220, 24, 32), "Coarse screen — ≈24 mm apertures", "8 Sept verification note: first stage. Openings a few mm above the largest kernel width (set from dissection). Free kernels, chips and dust pass; intact nuts, cracked-but-unopened nuts and shell halves are retained and slide 18° to the front into the sorting tray."));
+  csGrp.add(tag(at(box(260, 30, 3, st), 0, 15, -111), "Coarse screen rear wall", "Closes the high edge under the catch funnel"));
+  for (const x of [-131, 131]) csGrp.add(tag(at(box(3, 30, 222, st), x, 15, 0), "Coarse screen end wall", "Retained pieces can only leave over the front edge"));
+  csGrp.rotation.x = CS.ang; csGrp.position.set(-40, 304, 0);
+  sepBox.add(csGrp);
+  const chute = box(260, 3, 45, st); chute.rotation.x = 50 * Math.PI / 180; chute.position.set(-40, 253, 119);
+  sepBox.add(tag(chute, "Sorting-tray chute", "Retained fraction drops off the coarse screen's front edge into the sorting tray at the operator's position"));
+  // fine screen (tilts to −x)
+  fsGrp = new THREE.Group();
+  fsGrp.add(tag(holeSurface(400, 220, 8, 11), "Fine screen — 8 mm apertures", "Second stage (Rev 2 §3.2's screen): only dust passes to the waste drawer; kernels (10–22 mm) and chips are retained and convey 10° to the discharge lip on the left, where the cross-draft splits them."));
+  for (const z of [-111, 111]) fsGrp.add(tag(at(box(400, 22, 3, st), 0, 11, z), "Fine screen side wall", "Material cannot leave laterally"));
+  fsGrp.add(tag(at(box(3, 22, 222, st), 200, 11, 0), "Fine screen end dam", "Closes the high end"));
+  fsGrp.rotation.z = FS.ang; fsGrp.position.set(-110, 181, 0);
+  sepBox.add(fsGrp);
+  Gsep.add(sepBox);
+  for (const x of [-320, 100]) for (const z of [-130, 130]) {
+    const sp = spring(9, 80, 6, M.steel(), 2); sp.rotation.z = Math.PI / 2; sp.position.set(x, 160, z);
+    Gsep.add(tag(sp, "Screen-box spring", "Free length 80 mm, seated on the spring-post cap at 160 mm and carrying the screen-box ring at 240 mm. The box floats on these four springs; the rocker lever strokes it."));
+    Gsep.add(tag(at(box(46, 6, 46, M.frame2()), x, 157, z), "Spring-post cap", "Cap plate on the spring post; locates the bottom coil"));
+    Gsep.add(tag(at(box(46, 6, 46, M.frame2()), x, 243, z), "Spring seat (ring)", "Seat plate under the screen-box ring; locates the top coil"));
+  }
+  // waste drawer (static, pulls out to the front under the sorting tray)
+  Gsep.add(tag(at(box(370, 30, 240, M.galv()), -115, 120, 0), "Waste drawer", "Dust under 8 mm; static, pulls out to the front. Runs on two fixed runners between the spring posts, so it is carried by the frame and not by the oscillating screen box."));
+  Gsep.add(tag(at(box(30, 8, 6, M.darkSteel()), -115, 120, 123), "Drawer handle", ""));
+  for (const dz of [-122, 122]) Gframe.add(tag(at(box(420, 8, 16, M.frame()), -110, 100, dz), "Drawer runner", "Fixed runner spanning the two spring posts; the waste drawer slides on these"));
+  // sorting tray at the front
+  const sT = TRAY.sort; const stw = sT.x[1] - sT.x[0], std = sT.z[1] - sT.z[0], scx = (sT.x[0] + sT.x[1]) / 2, scz = (sT.z[0] + sT.z[1]) / 2;
+  const sortTray = new THREE.Group();
+  sortTray.add(box(stw, 3, std, M.galv()), at(box(stw, 45, 3, M.galv()), 0, 22, std / 2), at(box(stw, 45, 3, M.galv()), 0, 22, -std / 2), at(box(3, 45, std, M.galv()), stw / 2, 22, 0), at(box(3, 45, std, M.galv()), -stw / 2, 22, 0));
+  sortTray.position.set(scx, sT.floor, scz);
+  Gsep.add(tag(sortTray, "Manual sorting tray", "Fourth stage, at the operator's position: shell halves, cracked-but-unopened nuts and uncracked nuts land here. The operator frees kernels from halves and hand-returns uncracked nuts to the matching bin for one repass; that time is charged to operator-hours (Rev 2 §3.8)."));
+  // blower, duct, hood, divider, trays
+  Gframe.add(tag(at(box(150, 8, 130, M.frame()), -272, 45, 0), "Blower mounting plate", "Plate across the two base cross rails; carries the blower, its motor and the duct leg"));
+  const blw = cyl(25, 60, M.darkSteel()); blw.rotation.x = Math.PI / 2; blw.position.set(-272, 74, 0);
+  Gsep.add(tag(blw, "Centrifugal blower (own small motor)", "Cross-draft across the drop below the fine-screen lip. Set ≈20% below the lowest measured kernel suspension velocity so kernels are never carried; lifts only chips. Not on the main drive."));
+  const bm = cyl(18, 34, M.motor()); bm.rotation.x = Math.PI / 2; bm.position.set(-272, 74, 47); Gsep.add(tag(bm, "Blower motor", "Small 220 V motor"));
+  Gsep.add(tag(at(box(14, 62, 110, M.frame()), -309, 78, 0), "Duct support leg", "Leg from the blower mounting plate to the underside of the duct"));
+  Gsep.add(tag(at(box(26, 60, 120, M.galv()), -303, 105, 0), "Blower duct / nozzle", "Rises from the blower and blows horizontally toward the trays across the falling stream; uniform velocity profile across the 120 mm width"));
+  const hood = new THREE.Group();
+  hood.add(at(box(150, 108, 3, M.hood()), 0, 0, -112), at(box(150, 108, 3, M.hood()), 0, 0, 112), at(box(150, 3, 224, M.hood()), 0, 54, 0), at(box(3, 108, 224, M.hood()), -75, 0, 0));
+  hood.position.set(-397, 146, 0);
+  for (const hx of [-455, -345]) for (const hz of [-112, 112])
+    Gsep.add(tag(at(box(10, 18, 8, M.frame2()), hx, 209, hz), "Hood hanger strap", "Strap from the hood top rail down to the hood shell"));
+  Gsep.add(tag(hood, "Separation hood (front door)", "Encloses the air-split drop zone so chips cannot be blown out; front door opens to lift the trays out"));
+  Gsep.add(tag(at(box(3, 55, 224, st), -400, 122, 0), "Adjustable divider", "Spans the full width of the hood drop zone. Sets the kernel/chip split boundary at commissioning; carryover reported both ways"));
+  for (const dz of [-108, 108]) Gsep.add(tag(at(box(30, 10, 8, M.darkSteel()), -400, 150, dz), "Divider adjusting slot", "Slotted bracket on the hood side wall; the divider slides in x and locks"));
+  const mkTray = (x0, x1, nm, ds) => {
+    const t = new THREE.Group(); const w = x1 - x0;
+    t.add(box(w, 3, 200, M.galv()), at(box(w, 42, 3, M.galv()), 0, 21, 100), at(box(w, 42, 3, M.galv()), 0, 21, -100), at(box(3, 42, 200, M.galv()), w / 2, 21, 0), at(box(3, 42, 200, M.galv()), -w / 2, 21, 0));
+    t.position.set((x0 + x1) / 2, TRAY.floor, 0); Gsep.add(tag(t, nm, ds));
+  };
+  mkTray(TRAY.kernel[0], TRAY.kernel[1], "Kernel tray", "Product out — kernels fall near-vertical past the divider");
+  mkTray(TRAY.chip[0], TRAY.chip[1], "Chip tray", "Shell chips carried across the divider by the cross-draft");
+  Gframe.add(tag(at(box(190, 6, 230, M.frame()), -400, 43, 0), "Tray shelf", "Bolted across the base cross rails at 40 mm; the kernel and chip trays sit on it and lift out through the hood door"));
+  for (const dz of [-100, 100]) Gframe.add(tag(at(box(190, 12, 12, M.frame()), -400, 34, dz), "Tray shelf bearer", "Bearer under the tray shelf, landing on the base cross rails"));
+}
+
+/* ---------- GUARDS + E-STOP ---------- */
+{
+  const edges = (g) => g.add(new THREE.LineSegments(new THREE.EdgesGeometry(g.geometry), new THREE.LineBasicMaterial({ color: 0xe07020 })));
+  const gd = (w, h, d, x, y, z, nm, ds) => { const g = at(box(w, h, d, M.guard()), x, y, z); edges(g); Gguard.add(tag(g, nm, ds)); return g; };
+  gd(360, 110, 150, 5, 640, 0, "Nip guard", "Fixed, tool-removable; with the entry shroud it leaves no reach path to the nip (ISO 13857). The channel passes through a close-fitting slot.");
+  gd(410, 180, 95, -45, 530, -142.5, "Chain guard", "Encloses the sync chain, idlers, screen eccentric and rocker top; chains run dry");
+  gd(60, 60, 45, XL, Yr, -215, "Coupling guard", "Over the output coupling");
+  const tg = box(520, 70, 50, M.guard()); tg.position.set(48.5, 720, -175); tg.rotation.z = Math.atan2(400, 263);
+  edges(tg); Gguard.add(tag(tg, "Take-off chain guard", "Channel guard along the run from the main shaft to the jackshaft"));
+  gd(110, 130, 190, 180, 920, -168, "Jackshaft guard", "Over the 11T sprocket and the deck eccentric");
+  const es = cyl(14, 10, M.red()); es.rotation.x = Math.PI / 2; es.position.set(330, 800, 196);
+  Gguard.add(tag(es, "Emergency stop", "At the operating position (bins, handwheel, sorting tray all within reach); worm self-lock means no coast-down"), tag(at(box(34, 34, 6, M.yellow()), 330, 800, 192), "E-stop plate", ""));
+}
+
+/* ---------- FLOW PATH OVERLAY ---------- */
+{
+  const seg = (p1, p2, name, col = 0x1f8a4c) => {
+    const dir = new THREE.Vector3().subVectors(p2, p1); const len = dir.length();
+    const a = new THREE.ArrowHelper(dir.clone().normalize(), p1, len, col, Math.min(26, len * 0.3), 14);
+    Gflow.add(tag(a, "Material flow: " + name, "Toggleable overlay — hopper → grading → buffer bins (one grade at a time) → V-channel → nip → coarse screen → fine screen → air split → trays; sorting tray to the front; dashed = manual return of uncracked nuts."));
+  };
+  seg(V(510, 1290, 0), V(510, 1230, 0), "hopper → top deck");
+  seg(V(500, 1190, 0), V(280, 1140, 0), "along the decks — oversize retained, undersize falls through");
+  GRADES.forEach((g, i) => seg(V(262, DECK.lows[i] - 10, DISCH_Z[i]), V(205, 900, g.z), `deck → ${g.label.toLowerCase()} bin`));
+  seg(V(150, 812, 0), V(118, 730, 0), "selected bin → funnel");
+  seg(channelPt(150, 60), channelPt(10, 60), "single-lane V-channel → nip");
+  seg(V(0, 590, 0), V(0, 380, 0), "nip → catch funnel");
+  seg(V(0, 340, -40), V(0, 292, 100), "coarse screen: retained slides to the front", 0xb0692a);
+  seg(V(0, 290, 118), V(0, 235, 150), "→ sorting tray", 0xb0692a);
+  seg(V(0, 300, 0), V(-60, 240, 0), "kernels, chips, dust pass through");
+  seg(V(-80, 230, 0), V(-290, 190, 0), "fine screen → lip");
+  seg(V(-315, 140, 0), V(-355, 100, 0), "kernels drop → kernel tray");
+  seg(V(-315, 140, 0), V(-440, 100, 0), "chips blown → chip tray", 0xb0692a);
+  seg(V(-200, 180, 0), V(-200, 138, 0), "dust → waste drawer", 0x777777);
+  const dash = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(-30, 235, 150), V(-30, 700, 200), V(160, 930, 120), V(190, 900, 0)]), new THREE.LineDashedMaterial({ color: 0x1f8a4c, dashSize: 18, gapSize: 12 }));
+  dash.computeLineDistances(); Gflow.add(tag(dash, "Manual return of uncracked nuts", "Operator hand-returns uncracked nuts from the sorting tray to the matching bin for one repass — logged as operator time"));
+}
+
+/* ---------- SCALE REFERENCE: 1.70 m operator + floor scale bar ---------- */
+{
+  const skin = new THREE.MeshStandardMaterial({ color: 0x8d99a6, roughness: 0.85, transparent: true, opacity: 0.55 });
+  const op = new THREE.Group();
+  const limb = (r, h, x, y) => { const m = cyl(r, h, skin, 12); m.position.set(x, y, 0); return m; };
+  op.add(limb(58, 880, -85, 440), limb(58, 880, 85, 440));            // legs
+  const torso = box(360, 560, 200, skin); torso.position.y = 1170; op.add(torso);
+  op.add(limb(46, 540, -238, 1150), limb(46, 540, 238, 1150));         // arms
+  const neck = cyl(45, 70, skin, 10); neck.position.y = 1480; op.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(105, 16, 12), skin); head.position.y = 1585; op.add(head);
+  op.position.set(255, 0, 430);
+  Gscale.add(tag(op, "Operator (1.70 m) — scale reference", "Not part of the machine. Shown at the operating position so the assembly reads at true size: the bins, the gap handwheel, the gap scale and the emergency stop are all within reach from here. Toggle it off under Show subsystems."));
+
+  // 1 m floor scale bar, alternating 250 mm segments
+  const barY = -6, barZ = 560, barX0 = -500;
+  for (let s = 0; s < 4; s++) {
+    const mat = new THREE.MeshStandardMaterial({ color: s % 2 ? 0xf2f4f6 : 0x2b3238, roughness: 0.9 });
+    const seg = box(250, 4, 46, mat); seg.position.set(barX0 + 125 + s * 250, barY, barZ);
+    Gscale.add(tag(seg, "Scale bar — 1 m", "Four 250 mm segments. Use it to judge the machine against the floor grid, whose squares are 100 mm."));
+  }
+  for (const tx of [barX0, barX0 + 500, barX0 + 1000])
+    Gscale.add(tag(at(box(5, 4, 90, new THREE.MeshStandardMaterial({ color: 0x2b3238, roughness: 0.9 })), tx, barY, barZ), "Scale bar tick", "0 / 500 / 1000 mm"));
+}
+
+Object.values(sub).forEach((g) => { g.userData.base = g.position.clone(); });
+rollerL.userData.base = rollerL.position.clone(); rollerRAsm.userData.base = rollerRAsm.position.clone();
+const exParts = Object.values(sub);
+/* ---------- NUT SIMULATION: hopper → decks → bins → channel → nip → screens → trays ---------- */
+const G = 2500, VDECK = 45, VCH = 140, VNIP = 250, VCS = 55, VFS = 60;
+const P = [];
+const counts = { hopper: 60, bins: [0, 0, 0], queue: 0, whole: 0, crushed: 0, chips: 0, halves: 0, uncracked: 0, dust: 0, repassed: 0 };
+const binQueues = [[], [], []];
+const queueList = [];
+const piles = { kernel: [], chip: [], sort: [] };
+const sortUncracked = [];
+let nipBusy = false, spawnTimer = 0.4, releaseTimer = 0, dxDeck = 0, dxBox = 0;
+const hopperPile = at(box(120, 40, 160, new THREE.MeshStandardMaterial({ color: 0x5a3e27, roughness: 0.95 })), HOP.x, 1288, 0);
+Gsort.add(tag(hopperPile, "Nuts in the hopper", "Dried, depulped Katutubo nuts at ≈11.6% wb; refill from the panel"));
+
+function sampleNut() {
+  const r = Math.random(); const gi = r < 0.3 ? 0 : r < 0.7 ? 1 : 2; const g = GRADES[gi];
+  const w = rnd(g.w[0], g.w[1]);
+  return { g: gi, w, k: KFRAC * w + rnd(-KJIT, KJIT), L: 1.7 * w };
+}
+function addP(p) { P.push(p); Gnuts.add(p.mesh); return p; }
+function removeP(p) { const i = P.indexOf(p); if (i >= 0) P.splice(i, 1); Gnuts.remove(p.mesh); }
+function nutParticle(d, stage, x, y, z) {
+  const mesh = nutMesh(d.w, d.L, NUTMAT[d.g]);
+  tag(mesh, `${GRADES[d.g].label} pili nut — ${d.w.toFixed(1)} mm wide`, "Sampled from the grade's width range; kernel ≈ 0.54 × width (placeholder until dissection data). Watch it settle ridge-down in the V and go through the nip tip-first.");
+  return { kind: "nut", mesh, stage, t: 0, x, y, z, v: V(0, 0, 0), ...d, rad: 0.31 * d.w, yaw: rnd(0, Math.PI), deck: 0, target: d.g, fallX: [rnd(330, 480), rnd(290, 430)] };
+}
+function lieQuat(p) { return basisQuat(V(Math.cos(p.yaw), 0, Math.sin(p.yaw)), V(0, 1, 0)); }
+function spawnHopperNut() {
+  const d = sampleNut();
+  const p = nutParticle(d, "hopperDrop", HOP.x + rnd(-22, 22), HOP.outlet - 10, rnd(-42, 42));
+  // grading purity: nuts within 1.5 mm of the upper boundary are sometimes retained one deck early
+  if (d.g > 0 && d.w > GRADES[d.g].w[1] - 1.5 && Math.random() < 0.25) p.target = d.g - 1;
+  p.v.set(0, -80, 0); p.mesh.quaternion.copy(lieQuat(p)); addP(p);
+  counts.hopper--;
+}
+function releaseFromBin(gi) {
+  const d = binQueues[gi].shift(); counts.bins[gi]--;
+  const p = nutParticle(d, "funnel", 150, 815, GRADES[gi].z);
+  p.q0 = lieQuat(p); p.mesh.quaternion.copy(p.q0); p.mid = V(128, 765, GRADES[gi].z * 0.45);
+  addP(p); queueList.push(p); counts.queue = queueList.length;
+}
+function fragMesh(kind, p) {
+  if (kind === "kernel") {
+    const g = new THREE.SphereGeometry(p.k / 2, 14, 10); g.scale(1, 1.55, 1);
+    const m = new THREE.Mesh(g, p.outcome === "crushed" ? KERNELBAD : KERNELMAT);
+    if (p.outcome === "crushed") m.scale.set(1.15, 0.5, 1.15);
+    return tag(m, p.outcome === "crushed" ? "Crushed kernel" : "Whole kernel", p.outcome === "crushed" ? "Hard stop set below this nut's kernel Ø + clearance" : "Shell fractured; kernel cleared the hard stop");
+  }
+  if (kind === "half") { const m = nutMesh(p.w, p.L * 0.9, SHELLMAT); m.scale.z = 0.45; return tag(m, "Shell half", "Retained on the coarse screen → sorting tray"); }
+  if (kind === "chip") return tag(new THREE.Mesh(new THREE.TetrahedronGeometry(4.5), CHIPMAT), "Shell chip", "Passes the coarse screen, retained on the 8 mm screen, lifted by the cross-draft into the chip tray");
+  return tag(new THREE.Mesh(new THREE.SphereGeometry(1.6, 6, 5), DUSTMAT), "Dust", "Passes the 8 mm screen into the waste drawer");
+}
+function spawnFragments(p) {
+  const mk = (kind, dx, vx, vz) => {
+    const mesh = fragMesh(kind, p);
+    const f = { kind, mesh, stage: "fallToCS", t: 0, x: dx, y: Yr - 50, z: rnd(-12, 12), v: V(vx, -120, vz), w: p.w, k: p.k, g: p.g, outcome: p.outcome, rad: kind === "kernel" ? p.k / 2 : kind === "half" ? 0.3 * p.w : 4, spin: V(rnd(-4, 4), rnd(-4, 4), rnd(-4, 4)) };
+    if (kind === "half") { f.yaw = rnd(0, Math.PI); f.mesh.quaternion.copy(lieQuat(f)); }
+    addP(f);
+  };
+  mk("kernel", 0, rnd(-10, 10), 0);
+  mk("half", -8, rnd(-60, -20), rnd(-20, 20)); mk("half", 8, rnd(20, 60), rnd(-20, 20));
+  mk("chip", rnd(-6, 6), rnd(-40, 40), rnd(-30, 30)); mk("chip", rnd(-6, 6), rnd(-40, 40), rnd(-30, 30));
+  mk("dust", 0, rnd(-30, 30), rnd(-30, 30)); mk("dust", 0, rnd(-30, 30), rnd(-30, 30));
+}
+function settle(p, pileKey, x0, x1, z0, z1, floorY) {
+  const pile = piles[pileKey];
+  p.stage = "settled"; p.x = Math.min(x1 - p.rad, Math.max(x0 + p.rad, p.x)); p.z = rnd(z0 + p.rad, z1 - p.rad);
+  p.y = floorY + p.rad + Math.min(18, pile.length * 0.7);
+  p.mesh.position.set(p.x, p.y, p.z); p.mesh.rotation.set(rnd(0, 1), rnd(0, 6), rnd(0, 1));
+  pile.push(p);
+  if (pile.length > 28) { const old = pile.shift(); if (old.stage === "settled") removeP(old); }
+}
+function updateParticles(dt) {
+  // feed from the hopper
+  spawnTimer -= dt;
+  if (LIVE.feeding && counts.hopper > 0 && spawnTimer <= 0) { spawnHopperNut(); spawnTimer = 1.0; }
+  hopperPile.scale.y = Math.max(0.05, counts.hopper / 60); hopperPile.position.y = 1268 + 20 * hopperPile.scale.y;
+  // release from the selected bin
+  releaseTimer -= dt;
+  if (binQueues[selGrade].length > 0 && queueList.length < CH.slots.length && releaseTimer <= 0 && gateR[selGrade].position.y > 55) { releaseFromBin(selGrade); releaseTimer = 1.1; }
+  for (let i = 0; i < 3; i++) { const n = Math.min(14, counts.bins[i]); binPiles[i].scale.y = 1 + n * 1.4; binPiles[i].position.y = 20 + 2 * binPiles[i].scale.y; }
+  for (let i = P.length - 1; i >= 0; i--) {
+    const p = P[i], m = p.mesh; p.t += dt;
+    switch (p.stage) {
+      case "hopperDrop": {
+        p.v.y = Math.max(-500, p.v.y - G * dt); p.y += p.v.y * dt;
+        if (p.y <= deckY(0, p.x) + p.rad) { p.y = deckY(0, p.x) + p.rad; p.stage = "deck"; p.deck = 0; }
+        m.position.set(p.x + dxDeck, p.y, p.z); break;
+      }
+      case "deck": {
+        p.x -= VDECK * dt; p.y = deckY(p.deck, p.x) + p.rad; p.yaw += 0.6 * dt;
+        p.z += (Math.sin(p.t * 3 + p.yaw) * 6) * dt; p.z = Math.max(-100, Math.min(100, p.z));
+        if (p.x < 350 && p.deck === p.target) p.z += (DISCH_Z[p.deck] - p.z) * Math.min(1, 2.5 * dt);   // deflector steers to the offset opening
+        m.quaternion.copy(lieQuat(p)); m.rotation.z += 0.2 * Math.sin(p.t * 5);
+        m.position.set(p.x + dxDeck, p.y, p.z);
+        if (p.deck < p.target && p.x <= p.fallX[p.deck]) { p.stage = "deckFall"; p.v.set(0, 0, 0); }
+        else if (p.x <= DECK.x0) { p.stage = "trough"; p.t = 0; p.from = V(DECK.x0, deckY(p.deck, DECK.x0) + p.rad, DISCH_Z[p.deck]); p.to = V(202, BIN.top + 12, GRADES[p.deck].z); p.z = p.from.z; }
+        break;
+      }
+      case "deckFall": {
+        p.v.y = Math.max(-500, p.v.y - G * dt); p.y += p.v.y * dt; p.x -= VDECK * 0.3 * dt;
+        const ny = deckY(p.deck + 1, p.x) + p.rad;
+        if (p.y <= ny) { p.y = ny; p.deck++; p.stage = "deck"; }
+        m.position.set(p.x + dxDeck, p.y, p.z); break;
+      }
+      case "trough": {
+        const k = Math.min(1, p.t / 0.45); const pos = new THREE.Vector3().lerpVectors(p.from, p.to, k);
+        m.position.copy(pos); m.rotation.x += 3 * dt;
+        if (k >= 1) { counts.bins[p.deck]++; binQueues[p.deck].push({ g: p.g, w: p.w, k: p.k, L: p.L }); removeP(p); }
+        break;
+      }
+      case "funnel": {
+        const k = Math.min(1, p.t / 0.55);
+        const a = V(150, 815, GRADES[p.g].z), c = channelPt(CH.slots[CH.slots.length - 1] + 6, 0.31 * p.w + 22);
+        const pos = k < 0.5 ? new THREE.Vector3().lerpVectors(a, p.mid, k * 2) : new THREE.Vector3().lerpVectors(p.mid, c, (k - 0.5) * 2);
+        m.position.copy(pos); m.quaternion.copy(p.q0).slerp(Q_CHANNEL, k);
+        if (k >= 1) { p.stage = "queue"; p.s = CH.slots[CH.slots.length - 1] + 6; p.up = 0.31 * p.w + 22; }
+        break;
+      }
+      case "queue": {
+        const idx = queueList.indexOf(p); const target = CH.slots[Math.max(0, idx)];
+        p.up += (0.31 * p.w - p.up) * Math.min(1, 6 * dt);
+        if (p.s > target) p.s = Math.max(target, p.s - VCH * dt);
+        m.position.copy(channelPt(p.s, p.up)); m.quaternion.copy(Q_CHANNEL);
+        if (idx === 0 && p.s <= target + 0.01 && !nipBusy && LIVE.running) {
+          nipBusy = true; queueList.shift(); counts.queue = queueList.length;
+          p.stage = "entry"; p.t = 0; p.from = m.position.clone(); p.to = V(0, Yr + 42, 0);
+          p.outcome = judge(LIVE.gap, p);
+        }
+        break;
+      }
+      case "entry": {
+        const k = Math.min(1, p.t / 0.35);
+        m.position.lerpVectors(p.from, p.to, k); m.quaternion.copy(Q_CHANNEL).slerp(Q_NIP, k);
+        if (k >= 1) { p.stage = "nip"; p.y = p.to.y; p.x = 0; p.z = 0; }
+        break;
+      }
+      case "nip": {
+        p.y -= VNIP * dt; m.position.set(0, p.y, 0);
+        const sq = Math.max(0.55, LIVE.gap / p.w);
+        if (p.outcome !== "uncracked") { const f = Math.max(0, Math.min(1, (Yr + 35 - p.y) / 35)); m.scale.z = 1 - (1 - sq) * f; }
+        if (p.y <= Yr - 50) {
+          nipBusy = false;
+          if (p.outcome === "uncracked") { counts.uncracked++; p.stage = "fallToCS"; p.v.set(0, -VNIP, 0); p.rad = 0.31 * p.w; p.yaw = 0; p.rotBias = rnd(0, 6); }
+          else { counts[p.outcome]++; counts.chips += 2; removeP(p); spawnFragments(p); }
+        }
+        break;
+      }
+      case "fallToCS": {
+        p.v.y = Math.max(-550, p.v.y - G * dt);
+        p.x += p.v.x * dt; p.y += p.v.y * dt; p.z += p.v.z * dt;
+        if (p.y < 445) { const k = Math.min(1, 4 * dt); p.x += (0 - p.x) * k; p.z += (0 - p.z) * k; p.v.x *= 0.9; p.v.z *= 0.9; }
+        if (p.spin) { m.rotation.x += p.spin.x * dt; m.rotation.y += p.spin.y * dt; m.rotation.z += p.spin.z * dt; }
+        if (p.y <= csY(p.z) + p.rad) {
+          p.y = csY(p.z) + p.rad;
+          if (p.kind === "nut" || p.kind === "half") { p.stage = "csRetained"; p.yaw = rnd(0, Math.PI); m.quaternion.copy(lieQuat(p)); m.scale.set(1, 1, p.kind === "half" ? 0.45 : 1); }
+          else { p.stage = "csPass"; p.t = 0; }
+        }
+        m.position.set(p.x + dxBox, p.y, p.z); break;
+      }
+      case "csRetained": {
+        p.z += VCS * dt; p.y = csY(p.z) + p.rad; p.x = Math.max(CS.x0 + 10, Math.min(CS.x1 - 10, p.x + Math.sin(p.t * 2) * 8 * dt));
+        m.position.set(p.x + dxBox, p.y, p.z);
+        if (p.z >= 104) { p.stage = "chuteFall"; p.v.set(0, -40, 95); }
+        break;
+      }
+      case "chuteFall": {
+        p.v.y = Math.max(-550, p.v.y - G * dt); p.y += p.v.y * dt; p.z += p.v.z * dt; m.rotation.x += 2 * dt;
+        const sT = TRAY.sort;
+        if (p.y <= sT.floor + 3 + p.rad + Math.min(18, piles.sort.length * 0.7)) {
+          if (p.kind === "nut") sortUncracked.push({ p, d: { g: p.g, w: p.w, k: p.k, L: p.L } }); else counts.halves++;
+          settle(p, "sort", sT.x[0], sT.x[1], sT.z[0], sT.z[1], sT.floor + 3);
+        } else m.position.set(p.x, p.y, p.z);
+        break;
+      }
+      case "csPass": { m.position.set(p.x + dxBox, p.y, p.z); if (p.t > 0.25) { p.stage = "fallToFS"; p.v.set(0, 0, 0); } break; }
+      case "fallToFS": {
+        p.v.y = Math.max(-550, p.v.y - G * dt); p.y += p.v.y * dt;
+        if (p.y <= fsY(p.x) + p.rad) { p.y = fsY(p.x) + p.rad; p.stage = "fs"; p.t = 0; }
+        m.position.set(p.x + dxBox, p.y, p.z); break;
+      }
+      case "fs": {
+        p.x -= VFS * dt; p.y = fsY(p.x) + p.rad; p.z = Math.max(-95, Math.min(95, p.z + Math.sin(p.t * 4) * 5 * dt));
+        m.position.set(p.x + dxBox, p.y, p.z); if (p.spin) m.rotation.y += p.spin.y * dt;
+        if (p.kind === "dust" && p.t > 0.5) { p.stage = "fallToDrawer"; p.v.set(0, 0, 0); }
+        else if (p.x <= -305) { p.stage = "airDrop"; p.v.set(p.kind === "chip" ? -170 : -28, -30, 0); }
+        break;
+      }
+      case "fallToDrawer": {
+        p.v.y = Math.max(-550, p.v.y - G * dt); p.y += p.v.y * dt; m.position.set(p.x + dxBox, p.y, p.z);
+        if (p.y <= 137 + p.rad) { p.y = 137 + p.rad; p.stage = "vanish"; p.t = 0; counts.dust++; }
+        break;
+      }
+      case "vanish": { if (p.t > 2.5) removeP(p); break; }
+      case "airDrop": {
+        p.v.y = Math.max(-550, p.v.y - G * dt); p.x += p.v.x * dt; p.y += p.v.y * dt;
+        if (p.spin) { m.rotation.x += p.spin.x * dt; m.rotation.z += p.spin.z * dt; }
+        const tr = p.kind === "chip" ? TRAY.chip : TRAY.kernel; const key = p.kind === "chip" ? "chip" : "kernel";
+        if (p.y <= TRAY.floor + 3 + p.rad + Math.min(18, piles[key].length * 0.7)) settle(p, key, tr[0], tr[1], -95, 95, TRAY.floor + 3);
+        else m.position.set(p.x, p.y, p.z);
+        break;
+      }
+      default: break;
+    }
+  }
+}
+API.returnUncracked = () => {
+  let n = 0;
+  while (sortUncracked.length) { const { p, d } = sortUncracked.pop(); binQueues[d.g].push(d); counts.bins[d.g]++; n++; const i = piles.sort.indexOf(p); if (i >= 0) piles.sort.splice(i, 1); removeP(p); }
+  counts.uncracked = 0; counts.repassed += n; return n;
+};
+API.refill = () => { counts.hopper = 60; };
+
+/* ---------- camera ---------- */
+const VIEWS = {
+  iso: { t: V(60, 650, 40), th: 0.74, ph: 1.06, r: 2320, name: "" },
+  grading: { t: V(450, 1095, 0), th: 0.95, ph: 1.05, r: 1010, name: "Hopper → three decks → transition troughs → buffer bins" },
+  feed: { t: V(120, 720, 0), th: 0.55, ph: 1.15, r: 620, name: "Selected gate → funnel → V-channel (ridge in the groove, tip first) → nip" },
+  nip: { t: V(0, 545, 0), th: 0.3, ph: 1.28, r: 400, name: "Nip: rigid hard stop; ridge toward the adjustable roller, face toward the fixed roller" },
+  sep: { t: V(-190, 210, 30), th: 0.8, ph: 1.05, r: 950, name: "Coarse screen → sorting tray (front); through → 8 mm screen → air split → trays" },
+  drive: { t: V(20, 640, -200), th: Math.PI + 0.55, ph: 1.1, r: 1500, name: "Motor → worm reducer → main shaft → sync chain / screen rocker / take-off chain → jackshaft" },
+  sdrive: { t: V(-150, 400, -120), th: Math.PI + 0.95, ph: 1.12, r: 780, name: "Screen-box drive: main-shaft eccentric → connecting rod → rocker lever → link → screen box ring" },
+  top: { t: V(60, 560, 0), th: 0, ph: 0.12, r: 2500, name: "" },
+};
+let theta = VIEWS.iso.th, phi = VIEWS.iso.ph, radius = VIEWS.iso.r; const target = VIEWS.iso.t.clone();
+function placeCam() {
+  camera.position.set(target.x + radius * Math.sin(phi) * Math.sin(theta), target.y + radius * Math.cos(phi), target.z + radius * Math.sin(phi) * Math.cos(theta));
+  camera.lookAt(target);
+}
+placeCam();
+API.setView = (v) => { const vw = VIEWS[v] || VIEWS.iso; theta = vw.th; phi = vw.ph; radius = vw.r; target.copy(vw.t); placeCam(); document.getElementById("stagelabel").textContent = vw.name; };
+
+/* ---------- interaction ---------- */
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+let dragging = false, moved = 0, px = 0, py = 0; const ADJ = { active: false, ly: 0 };
+const cxy = (e) => [e.clientX ?? e.touches?.[0]?.clientX, e.clientY ?? e.touches?.[0]?.clientY];
+const setMouse = (e) => { const r2 = renderer.domElement.getBoundingClientRect(); const [hx, hy] = cxy(e); mouse.x = ((hx - r2.left) / r2.width) * 2 - 1; mouse.y = -((hy - r2.top) / r2.height) * 2 + 1; ray.setFromCamera(mouse, camera); };
+const wheelHitAt = (e) => { setMouse(e); return ray.intersectObjects(scene.children, true).some((h) => h.object.userData.isWheel); };
+const onDown = (e) => { const [dx0, dy0] = cxy(e); if (wheelHitAt(e)) { ADJ.active = true; ADJ.ly = dy0; moved = 99; return; } dragging = true; moved = 0; px = dx0; py = dy0; };
+const onMove = (e) => {
+  if (ADJ.active) { const [, my] = cxy(e); const d = my - ADJ.ly; ADJ.ly = my; LIVE.gap = Math.min(GAPMAX, Math.max(GAPMIN, LIVE.gap - d * 0.05)); hwSpin += d * 0.06; API.onGapChange && API.onGapChange(LIVE.gap); return; }
+  if (!dragging) return;
+  const [cx2, cy2] = cxy(e); moved += Math.abs(cx2 - px) + Math.abs(cy2 - py);
+  theta -= (cx2 - px) * 0.005; phi = Math.min(1.55, Math.max(0.1, phi - (cy2 - py) * 0.005)); px = cx2; py = cy2; placeCam();
+};
+const onUp = () => { dragging = false; ADJ.active = false; };
+const onWheel = (e) => { e.preventDefault(); radius = Math.min(4200, Math.max(250, radius + e.deltaY * 1.5)); placeCam(); };
+renderer.domElement.addEventListener("mousedown", onDown);
+renderer.domElement.addEventListener("touchstart", onDown, { passive: true });
+window.addEventListener("mousemove", onMove); window.addEventListener("touchmove", onMove, { passive: true });
+window.addEventListener("mouseup", onUp); window.addEventListener("touchend", onUp);
+renderer.domElement.addEventListener("wheel", onWheel, { passive: false });
+let highlighted = null;
+renderer.domElement.addEventListener("click", (e) => {
+  if (moved > 6) return; setMouse(e);
+  const all = ray.intersectObjects(scene.children, true).filter((h) => h.object.userData.pname && h.object.visible);
+  const solid = all.filter((h) => !(h.object.material && h.object.material.transparent && h.object.material.opacity < 0.55));
+  const hits = solid.length ? solid : all;
+  if (highlighted) { highlighted.material?.emissive?.setHex(0x000000); highlighted = null; }
+  if (hits.length) {
+    const o = hits[0].object;
+    if (o.material?.emissive && !o.material.map) { o.material.emissive.setHex(0x224466); highlighted = o; }
+    showPick(o.userData.pname, o.userData.pdesc);
+    if (o.userData.grade !== undefined) API.selectGrade(o.userData.grade);
+  } else showPick(null, null);
+});
+
+/* ---------- animation ---------- */
+const clock = new THREE.Clock(); let thetaShaft = 0, lastGap = LIVE.gap;
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
+function placeRod(rod, a, b, len0) { rod.position.lerpVectors(a, b, 0.5); rod.rotation.z = Math.atan2(b.y - a.y, b.x - a.x); rod.scale.x = a.distanceTo(b) / len0; }
+function animate() {
+  requestAnimationFrame(animate);
+  const dtRaw = Math.min(clock.getDelta(), 0.05), dt = dtRaw * LIVE.speed, L = LIVE;
+  if (Math.abs(L.gap - lastGap) > 0.4) { lastGap = L.gap; API.buildSyncChain(L.gap); }
+  const dg = L.gap - GAP0;
+  rollerRAsm.position.x = rollerRAsm.userData.base.x + dg + L.explode * rollerRAsm.userData.exSelf.x * 160;
+  rollerL.position.x = rollerL.userData.base.x + L.explode * rollerL.userData.exSelf.x * 160;
+  spkR.position.x = 83 + dg; adjMove.position.x = dg;
+  springsAdj.forEach((s) => { s.position.x = 150 + dg; s.scale.x = (66 - dg) / 66; });
+  if (barGrp) { barGrp.position.z += (binZ[selGrade] - barGrp.position.z) * 0.12; gateR.forEach((gt, i) => { const ty = i === selGrade ? 65 : 31; gt.position.y += (ty - gt.position.y) * 0.18; }); }
+  if (hwG) hwG.rotation.x = hwSpin;
+  for (const g of exParts) g.position.copy(g.userData.base).addScaledVector(g.userData.exVec, L.explode * 220);
+  Gnuts.visible = L.explode < 0.05;
+  if (L.running && L.explode < 0.05) {
+    const w = (36 * Math.PI * 2) / 60;
+    thetaShaft -= w * dt;
+    spinL.rotation.z = thetaShaft; spinR.rotation.z = -thetaShaft;
+    spkL.rotation.z = thetaShaft; spkR.rotation.z = -thetaShaft; spkT.rotation.z = thetaShaft;
+    const thetaJack = thetaShaft * (16 / 11); spkJ.rotation.z = thetaJack; jackSpin.rotation.z = thetaJack;
+    idlers.forEach((id) => (id.rotation.z -= w * 2.3 * dt));
+    for (const c of [chainSync, chainTake]) if (c) c.userData.tex.offset.x += c.userData.dir * ((w * 32.55) / c.userData.len) * dt;
+    // sorter: jackshaft eccentric → rod → deck frame (±4 mm)
+    dxDeck = 4 * Math.cos(thetaJack);
+    deckFrame.position.x = dxDeck;
+    rockers.forEach((r) => { r.rotation.z = -dxDeck / 40; r.position.x = r.userData.bx ?? (r.userData.bx = r.position.x); r.position.x += dxDeck / 2; });
+    tmpA.set(180 + 4 * Math.cos(thetaJack), 920 + 4 * Math.sin(thetaJack), -208); tmpB.set(265 + dxDeck, 925, -208);
+    placeRod(rodDeck, tmpA, tmpB, 85);
+    // screen: main-shaft eccentric → rod → rocker lever → link → screen box
+    const pinX = XL + 4 * Math.cos(thetaShaft), pinY = Yr + 4 * Math.sin(thetaShaft);
+    const alpha = Math.asin((4 * Math.cos(thetaShaft)) / 90);
+    lever.rotation.z = -alpha;
+    tmpA.set(pinX, pinY, -106); tmpB.set(-235 + 90 * Math.sin(alpha), 430 + 90 * Math.cos(alpha), -106);
+    placeRod(rodScreen, tmpA, tmpB, 152);
+    dxBox = -120 * Math.sin(alpha); sepBox.position.x = dxBox;
+    tmpA.set(-235 - 120 * Math.sin(alpha), 430 - 120 * Math.cos(alpha), -106); tmpB.set(-195 + dxBox, 310, -106);
+    placeRod(linkScreen, tmpA, tmpB, 40);
+    updateParticles(dt);
+  }
+  renderer.render(scene, camera);
+}
+animate();
+window.addEventListener("resize", () => { const w2 = mount.clientWidth, h2 = mount.clientHeight; camera.aspect = w2 / h2; camera.updateProjectionMatrix(); renderer.setSize(w2, h2); });
+API.sub = sub;
+API.zoomBy = (f) => { radius = Math.min(4200, Math.max(250, radius * f)); placeCam(); };
+
+/* ---------- panel wiring ---------- */
+(function wire() {
+  const $ = (id) => document.getElementById(id);
+  const gradeBtns = Array.from(document.querySelectorAll(".grades button"));
+  const paintGap = () => {
+    const g = GRADES[selGrade], [lo, hi] = recWindow(g), gap = Math.round(LIVE.gap), n = $("gapNote");
+    $("gap").value = gap; $("gapv").textContent = gap;
+    if (gap < lo) { n.className = "bad"; n.textContent = `Below the derived window ${lo}–${hi} mm for ${g.label.toLowerCase()}: any kernel wider than ${(gap - CLEAR).toFixed(1)} mm gets crushed.`; }
+    else if (gap > hi) { n.className = "warn"; n.textContent = `Above the derived window ${lo}–${hi} mm: the smallest ${g.label.toLowerCase()} nuts get under ${DEFORM} mm of squeeze and pass uncracked.`; }
+    else { n.className = "ok"; n.textContent = `Inside the derived window ${lo}–${hi} mm (gap ≥ largest kernel + ${CLEAR}; gap ≤ smallest nut − ${DEFORM}): every sampled nut fractures and every kernel clears the stop.`; }
+  };
+  API.selectGrade = (gi) => { selGrade = gi; gradeBtns.forEach((b) => b.classList.toggle("on", +b.dataset.g === gi)); paintGap(); };
+  gradeBtns.forEach((b) => b.addEventListener("click", () => API.selectGrade(+b.dataset.g)));
+  $("gap").addEventListener("input", (e) => { LIVE.gap = +e.target.value; paintGap(); });
+  API.onGapChange = () => paintGap();
+  $("gapAuto").addEventListener("click", () => { const [lo, hi] = recWindow(GRADES[selGrade]); LIVE.gap = Math.round((lo + hi) / 2); paintGap(); });
+  $("speed").addEventListener("input", (e) => { LIVE.speed = +e.target.value; $("spdv").textContent = LIVE.speed.toFixed(2).replace(/\.?0+$/, "") + "×"; });
+  $("explode").addEventListener("input", (e) => { LIVE.explode = +e.target.value; $("expNote").style.display = LIVE.explode > 0.05 ? "inline" : "none"; });
+  const runBtn = $("runBtn");
+  runBtn.addEventListener("click", () => { LIVE.running = !LIVE.running; runBtn.textContent = LIVE.running ? "Running at 36 rpm" : "Start the machine"; runBtn.classList.toggle("stopped", !LIVE.running); });
+  const feedBtn = $("feedBtn");
+  feedBtn.addEventListener("click", () => { LIVE.feeding = !LIVE.feeding; feedBtn.textContent = LIVE.feeding ? "Feeding nuts" : "Feed paused"; feedBtn.classList.toggle("on", LIVE.feeding); });
+  $("returnBtn").addEventListener("click", () => { const n = API.returnUncracked(); showPick(n ? `${n} uncracked nut${n > 1 ? "s" : ""} returned for a repass` : "Nothing to return", n ? "Hand-returned from the sorting tray to the matching bin; this time counts as operator-hours in the throughput comparison." : "No uncracked nuts in the sorting tray."); });
+  $("refillBtn").addEventListener("click", () => API.refill());
+  document.querySelectorAll("#views button").forEach((b) => b.addEventListener("click", () => API.setView(b.dataset.v)));
+  const SUBS = [["frame", "Frame and plates"], ["cracking", "Rollers and carriages"], ["adjustment", "Gap adjustment"], ["drive", "Drive and chains"], ["sorting", "Hopper and decks"], ["feeding", "Bins and V-channel"], ["separation", "Separation"], ["guards", "Guards and E-stop"], ["flow", "Flow-path arrows"], ["nuts", "Nuts and kernels"], ["scale", "Operator / scale bar"]];
+  const grid = $("subgrid");
+  SUBS.forEach(([k, label]) => { const b = document.createElement("button"); b.className = "sm on"; b.textContent = label; b.addEventListener("click", () => { const on = !API.sub[k].visible; API.sub[k].visible = on; b.classList.toggle("on", on); }); grid.appendChild(b); });
+  const tbl = $("counts");
+  const rows = [["Hopper", () => counts.hopper], ["Large bin", () => counts.bins[0]], ["Medium bin", () => counts.bins[1]], ["Small bin", () => counts.bins[2]], ["In the V-channel", () => counts.queue],
+    ["Whole kernels (kernel tray)", () => counts.whole], ["Crushed kernels", () => counts.crushed], ["Chips (chip tray)", () => counts.chips], ["Shell halves (sorting tray)", () => counts.halves], ["Uncracked nuts (sorting tray)", () => counts.uncracked], ["Dust (drawer)", () => counts.dust], ["Returned for repass", () => counts.repassed]];
+  tbl.innerHTML = rows.map(([l]) => `<tr><td>${l}</td><td>0</td></tr>`).join("");
+  const cells = Array.from(tbl.querySelectorAll("td:last-child"));
+  setInterval(() => rows.forEach((r, i) => { const v = String(r[1]()); if (cells[i].textContent !== v) cells[i].textContent = v; }), 250);
+  paintGap();
+  // pinch zoom
+  let pinchD = 0; const dist = (e) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  window.addEventListener("touchstart", (e) => { if (e.touches.length === 2) pinchD = dist(e); }, { capture: true, passive: true });
+  window.addEventListener("touchmove", (e) => { if (e.touches.length === 2 && pinchD) { e.stopPropagation(); const d = dist(e); if (d > 0) API.zoomBy(pinchD / d); pinchD = d; } }, { capture: true, passive: true });
+  window.addEventListener("touchend", (e) => { if (e.touches.length < 2) pinchD = 0; }, { capture: true, passive: true });
+})();
+</script>
+</body>
+</html>
