@@ -22,7 +22,7 @@ import * as THREE from "three";
    · Static hopper cone clipped the OSCILLATING deck-frame top rail.
      Hopper raised 40 mm and given a mounting flange on the cradle
      beams; cone now touches nothing that moves.
-   · BOTTOM_DECK_PERFORATED = false (20 mm apertures + fines drawer).
+   · BOTTOM_DECK_PERFORATED = true (20 mm apertures + fines drawer).
    · Added a 1.70 m operator and a 1 m floor scale bar so the
      assembly reads at true size.
 
@@ -40,7 +40,7 @@ import * as THREE from "three";
    ================================================================ */
 
 // ---- engineering placeholders (all [verify] against the team's own lot) ----
-const BOTTOM_DECK_PERFORATED = true;  // Rev 2 §3.2: 20 mm apertures + fines drawer.
+const BOTTOM_DECK_PERFORATED = false;  // Rev 2 §3.2: 20 mm apertures + fines drawer.
 const DEFORM = 1.1, CLEAR = 0.5, KFRAC = 0.54, KJIT = 0.4;   // Gallegos 2013 deformation; kernel Ø ≈ 0.54·width
 const GRADES = [
   { key: "large", label: "Large", w: [31, 36], z: 95, color: 0x4f351f },
