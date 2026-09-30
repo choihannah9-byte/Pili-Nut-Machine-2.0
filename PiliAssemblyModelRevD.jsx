@@ -22,7 +22,7 @@ import * as THREE from "three";
    · Static hopper cone clipped the OSCILLATING deck-frame top rail.
      Hopper raised 40 mm and given a mounting flange on the cradle
      beams; cone now touches nothing that moves.
-   · BOTTOM_DECK_PERFORATED = true (20 mm apertures + fines drawer).
+   · BOTTOM_DECK_PERFORATED = false (20 mm apertures + fines drawer).
    · Added a 1.70 m operator and a 1 m floor scale bar so the
      assembly reads at true size.
 
